@@ -27,7 +27,7 @@ import org.keycloak.cluster.ClusterEvent;
 import org.keycloak.cluster.ClusterListener;
 import org.keycloak.cluster.ClusterProvider;
 import org.keycloak.common.util.ConcurrentMultivaluedHashMap;
-import org.keycloak.marshalling.Marshalling;
+import org.keycloak.serialization.redis.ProtobufRedisSerializer;
 import org.redisson.api.RTopic;
 import org.redisson.api.RedissonClient;
 import org.redisson.api.listener.MessageListener;
@@ -49,11 +49,13 @@ public class RedisPubSubEventManager {
     private final String myRegion;
     private final ConcurrentMultivaluedHashMap<String, ClusterListener> listeners = new ConcurrentMultivaluedHashMap<>();
     private final ConcurrentMap<String, Integer> subscriptionIds = new ConcurrentHashMap<>();
+    private final ProtobufRedisSerializer serializer;
 
     public RedisPubSubEventManager(RedissonClient redisson, String myNodeId, String myRegion) {
         this.redisson = redisson;
         this.myNodeId = myNodeId;
         this.myRegion = myRegion;
+        this.serializer = new ProtobufRedisSerializer();
     }
 
     /**
@@ -112,7 +114,7 @@ public class RedisPubSubEventManager {
 
         try {
             // Serialize the event using Protobuf
-            byte[] serialized = Marshalling.serializeToByteArray(wrappedEvent);
+            byte[] serialized = serializer.serialize(wrappedEvent);
 
             // Publish to Redis channel
             RTopic topic = redisson.getTopic(channel);
@@ -137,7 +139,7 @@ public class RedisPubSubEventManager {
         MessageListener<byte[]> messageListener = (ch, msg) -> {
             try {
                 // Deserialize the event
-                WrapperClusterEvent event = (WrapperClusterEvent) Marshalling.deserializeFromByteArray(msg);
+                WrapperClusterEvent event = (WrapperClusterEvent) serializer.deserialize(msg, WrapperClusterEvent.class);
 
                 if (event.rejectEvent(myNodeId, myRegion)) {
                     if (logger.isTraceEnabled()) {

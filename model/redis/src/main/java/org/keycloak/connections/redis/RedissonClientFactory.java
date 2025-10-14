@@ -43,22 +43,21 @@ public class RedissonClientFactory {
 
         switch (config.getMode()) {
             case STANDALONE:
+                // Get first host for standalone mode
+                String address = config.getHosts().isEmpty() ?
+                        "redis://localhost:6379" :
+                        "redis://" + config.getHosts().get(0).getHost() + ":" + config.getHosts().get(0).getPort();
+
                 redissonConfig.useSingleServer()
-                        .setAddress("redis://" + config.getHost() + ":" + config.getPort())
+                        .setAddress(address)
                         .setDatabase(config.getDatabase())
                         .setPassword(config.getPassword())
-                        .setConnectionPoolSize(config.getPoolMaxTotal())
-                        .setConnectionMinimumIdleSize(config.getPoolMinIdle())
-                        .setTimeout(config.getTimeout())
-                        .setConnectTimeout(config.getTimeout())
-                        .setSslEnableEndpointIdentification(config.isSslEnabled());
+                        .setConnectionPoolSize(config.getPoolMaxSize())
+                        .setConnectionMinimumIdleSize(config.getPoolMinSize())
+                        .setTimeout((int) config.getTimeout().toMillis())
+                        .setConnectTimeout((int) config.getTimeout().toMillis());
 
-                if (config.isSslEnabled()) {
-                    redissonConfig.useSingleServer().setSslProtocols(new String[]{"TLSv1.2", "TLSv1.3"});
-                }
-
-                logger.infof("Creating Redisson client for standalone Redis: %s:%d",
-                        config.getHost(), config.getPort());
+                logger.infof("Creating Redisson client for standalone Redis: %s", address);
                 break;
 
             case SENTINEL:
@@ -69,43 +68,37 @@ public class RedissonClientFactory {
                         .setMasterName(masterName)
                         .setDatabase(config.getDatabase())
                         .setPassword(config.getPassword())
-                        .setMasterConnectionPoolSize(config.getPoolMaxTotal())
-                        .setMasterConnectionMinimumIdleSize(config.getPoolMinIdle())
-                        .setTimeout(config.getTimeout())
-                        .setConnectTimeout(config.getTimeout());
+                        .setMasterConnectionPoolSize(config.getPoolMaxSize())
+                        .setMasterConnectionMinimumIdleSize(config.getPoolMinSize())
+                        .setTimeout((int) config.getTimeout().toMillis())
+                        .setConnectTimeout((int) config.getTimeout().toMillis());
 
                 // Add sentinel addresses
-                if (config.getSentinelNodes() != null) {
-                    for (String node : config.getSentinelNodes()) {
-                        redissonConfig.useSentinelServers().addSentinelAddress("redis://" + node);
-                    }
-                }
-
-                if (config.getSentinelPassword() != null) {
-                    redissonConfig.useSentinelServers().setSentinelPassword(config.getSentinelPassword());
+                for (RedisConnectionConfig.HostPort host : config.getHosts()) {
+                    String sentinelAddress = "redis://" + host.getHost() + ":" + host.getPort();
+                    redissonConfig.useSentinelServers().addSentinelAddress(sentinelAddress);
                 }
 
                 logger.infof("Creating Redisson client for Redis Sentinel: master=%s, sentinels=%d",
-                        masterName, config.getSentinelNodes() != null ? config.getSentinelNodes().size() : 0);
+                        masterName, config.getHosts().size());
                 break;
 
             case CLUSTER:
                 redissonConfig.useClusterServers()
                         .setPassword(config.getPassword())
-                        .setMasterConnectionPoolSize(config.getPoolMaxTotal())
-                        .setMasterConnectionMinimumIdleSize(config.getPoolMinIdle())
-                        .setTimeout(config.getTimeout())
-                        .setConnectTimeout(config.getTimeout());
+                        .setMasterConnectionPoolSize(config.getPoolMaxSize())
+                        .setMasterConnectionMinimumIdleSize(config.getPoolMinSize())
+                        .setTimeout((int) config.getTimeout().toMillis())
+                        .setConnectTimeout((int) config.getTimeout().toMillis());
 
                 // Add cluster nodes
-                if (config.getClusterNodes() != null) {
-                    for (String node : config.getClusterNodes()) {
-                        redissonConfig.useClusterServers().addNodeAddress("redis://" + node);
-                    }
+                for (RedisConnectionConfig.HostPort host : config.getHosts()) {
+                    String clusterAddress = "redis://" + host.getHost() + ":" + host.getPort();
+                    redissonConfig.useClusterServers().addNodeAddress(clusterAddress);
                 }
 
                 logger.infof("Creating Redisson client for Redis Cluster: nodes=%d",
-                        config.getClusterNodes() != null ? config.getClusterNodes().size() : 0);
+                        config.getHosts().size());
                 break;
 
             default:
