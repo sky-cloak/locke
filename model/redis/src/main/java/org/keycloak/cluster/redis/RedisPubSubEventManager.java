@@ -49,13 +49,13 @@ public class RedisPubSubEventManager {
     private final String myRegion;
     private final ConcurrentMultivaluedHashMap<String, ClusterListener> listeners = new ConcurrentMultivaluedHashMap<>();
     private final ConcurrentMap<String, Integer> subscriptionIds = new ConcurrentHashMap<>();
-    private final ProtobufRedisSerializer serializer;
+    private final ProtobufRedisSerializer<WrapperClusterEvent> serializer;
 
     public RedisPubSubEventManager(RedissonClient redisson, String myNodeId, String myRegion) {
         this.redisson = redisson;
         this.myNodeId = myNodeId;
         this.myRegion = myRegion;
-        this.serializer = new ProtobufRedisSerializer();
+        this.serializer = new ProtobufRedisSerializer<>(WrapperClusterEvent.class);
     }
 
     /**
@@ -139,7 +139,7 @@ public class RedisPubSubEventManager {
         MessageListener<byte[]> messageListener = (ch, msg) -> {
             try {
                 // Deserialize the event
-                WrapperClusterEvent event = (WrapperClusterEvent) serializer.deserialize(msg, WrapperClusterEvent.class);
+                WrapperClusterEvent event = serializer.deserialize(msg);
 
                 if (event.rejectEvent(myNodeId, myRegion)) {
                     if (logger.isTraceEnabled()) {
