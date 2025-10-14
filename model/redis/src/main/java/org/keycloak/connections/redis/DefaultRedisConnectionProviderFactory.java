@@ -22,6 +22,7 @@ import org.keycloak.Config;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.provider.ServerInfoAwareProviderFactory;
+import org.redisson.api.RedissonClient;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -35,7 +36,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  *
  * @author Keycloak Redis Team
  */
-public class DefaultRedisConnectionProviderFactory 
+public class DefaultRedisConnectionProviderFactory
         implements RedisConnectionProviderFactory, ServerInfoAwareProviderFactory {
 
     private static final Logger logger = Logger.getLogger(DefaultRedisConnectionProviderFactory.class);
@@ -44,6 +45,7 @@ public class DefaultRedisConnectionProviderFactory
     private Config.Scope config;
     private volatile RedisConnectionProvider connectionProvider;
     private volatile RedisClientManager clientManager;
+    private volatile RedissonClient redissonClient;
 
     @Override
     public RedisConnectionProvider create(KeycloakSession session) {
@@ -74,6 +76,10 @@ public class DefaultRedisConnectionProviderFactory
             this.clientManager = new RedisClientManager(redisConfig);
             clientManager.init();
 
+            // Create Redisson client for distributed primitives
+            this.redissonClient = RedissonClientFactory.createClient(redisConfig);
+            logger.info("Redisson client initialized for distributed locks and pub/sub");
+
             // Create topology info
             String nodeName = config.get("nodeName");
             String siteName = config.get("siteName");
@@ -82,7 +88,7 @@ public class DefaultRedisConnectionProviderFactory
             logger.infof("Redis topology: %s", topologyInfo);
 
             // Create provider
-            this.connectionProvider = new DefaultRedisConnectionProvider(clientManager, topologyInfo);
+            this.connectionProvider = new DefaultRedisConnectionProvider(clientManager, redissonClient, topologyInfo);
 
             return connectionProvider;
         }
@@ -106,6 +112,10 @@ public class DefaultRedisConnectionProviderFactory
             if (connectionProvider != null) {
                 connectionProvider.close();
                 connectionProvider = null;
+            }
+            if (redissonClient != null) {
+                RedissonClientFactory.closeClient(redissonClient);
+                redissonClient = null;
             }
             if (clientManager != null) {
                 clientManager.close();

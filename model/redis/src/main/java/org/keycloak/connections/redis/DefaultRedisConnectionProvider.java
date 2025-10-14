@@ -18,6 +18,7 @@
 package org.keycloak.connections.redis;
 
 import org.keycloak.cache.redis.RedisCache;
+import org.redisson.api.RedissonClient;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -34,12 +35,14 @@ import java.util.concurrent.ScheduledExecutorService;
 public class DefaultRedisConnectionProvider implements RedisConnectionProvider {
 
     private final RedisClientManager clientManager;
+    private final RedissonClient redissonClient;
     private final TopologyInfo topologyInfo;
     private final Map<String, RedisCache<?, ?>> caches;
     private final ScheduledExecutorService scheduledExecutor;
 
-    public DefaultRedisConnectionProvider(RedisClientManager clientManager, TopologyInfo topologyInfo) {
+    public DefaultRedisConnectionProvider(RedisClientManager clientManager, RedissonClient redissonClient, TopologyInfo topologyInfo) {
         this.clientManager = clientManager;
+        this.redissonClient = redissonClient;
         this.topologyInfo = topologyInfo;
         this.caches = new ConcurrentHashMap<>();
         this.scheduledExecutor = Executors.newScheduledThreadPool(2);
@@ -86,6 +89,11 @@ public class DefaultRedisConnectionProvider implements RedisConnectionProvider {
     }
 
     @Override
+    public RedissonClient getRedissonClient() {
+        return redissonClient;
+    }
+
+    @Override
     public void close() {
         // Close all caches
         caches.values().forEach(cache -> {
@@ -94,6 +102,11 @@ public class DefaultRedisConnectionProvider implements RedisConnectionProvider {
 
         // Shutdown executors
         scheduledExecutor.shutdown();
+
+        // Close Redisson client
+        if (redissonClient != null) {
+            RedissonClientFactory.closeClient(redissonClient);
+        }
 
         // Close client manager
         clientManager.close();
