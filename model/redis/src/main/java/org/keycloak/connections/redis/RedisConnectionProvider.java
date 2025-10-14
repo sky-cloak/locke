@@ -148,4 +148,12 @@ public interface RedisConnectionProvider extends Provider {
      * @return true if healthy, false otherwise
      */
     boolean isHealthy();
+
+    /**
+     * Get the Redisson client for distributed primitives (locks, pub/sub, etc.).
+     * This is used by the cluster provider for distributed coordination.
+     *
+     * @return Redisson client instance, or null if not available
+     */
+    org.redisson.api.RedissonClient getRedissonClient();
 }
