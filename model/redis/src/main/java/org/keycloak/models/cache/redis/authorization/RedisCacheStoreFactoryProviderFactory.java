@@ -32,12 +32,13 @@ import org.keycloak.models.cache.authorization.CachedStoreFactoryProvider;
 import org.keycloak.models.cache.authorization.CachedStoreProviderFactory;
 import org.keycloak.models.cache.redis.entities.Revisioned;
 import org.keycloak.models.cache.redis.events.InvalidationEvent;
+import org.keycloak.provider.EnvironmentDependentProviderFactory;
 
 /**
  * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
  * @author <a href="mailto:sthorger@redhat.com">Stian Thorgersen</a>
  */
-public class RedisCacheStoreFactoryProviderFactory implements CachedStoreProviderFactory {
+public class RedisCacheStoreFactoryProviderFactory implements CachedStoreProviderFactory, EnvironmentDependentProviderFactory {
 
     private static final Logger log = Logger.getLogger(RedisCacheStoreFactoryProviderFactory.class);
     public static final String AUTHORIZATION_CLEAR_CACHE_EVENTS = "AUTHORIZATION_CLEAR_CACHE_EVENTS";
@@ -92,6 +93,13 @@ public class RedisCacheStoreFactoryProviderFactory implements CachedStoreProvide
     @Override
     public String getId() {
         return "default";
+    }
+
+    @Override
+    public boolean isSupported(Config.Scope config) {
+        // Only enabled when cache mechanism is set to 'redis'
+        String cacheType = Config.getProvider("cache");
+        return "redis".equals(cacheType);
     }
 
 }

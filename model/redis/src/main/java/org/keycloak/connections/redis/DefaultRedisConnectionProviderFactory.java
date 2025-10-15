@@ -21,6 +21,7 @@ import org.jboss.logging.Logger;
 import org.keycloak.Config;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
+import org.keycloak.provider.EnvironmentDependentProviderFactory;
 import org.keycloak.provider.ServerInfoAwareProviderFactory;
 import org.redisson.api.RedissonClient;
 
@@ -37,7 +38,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * @author Keycloak Redis Team
  */
 public class DefaultRedisConnectionProviderFactory
-        implements RedisConnectionProviderFactory, ServerInfoAwareProviderFactory {
+        implements RedisConnectionProviderFactory, ServerInfoAwareProviderFactory, EnvironmentDependentProviderFactory {
 
     private static final Logger logger = Logger.getLogger(DefaultRedisConnectionProviderFactory.class);
     private static final ReadWriteLock READ_WRITE_LOCK = new ReentrantReadWriteLock();
@@ -144,6 +145,13 @@ public class DefaultRedisConnectionProviderFactory
         }
 
         return info;
+    }
+
+    @Override
+    public boolean isSupported(Config.Scope config) {
+        // Only enabled when cache mechanism is set to 'redis'
+        String cacheType = Config.getProvider("cache");
+        return "redis".equals(cacheType);
     }
 
     /**
