@@ -166,6 +166,42 @@ final class CachingPropertyMappers implements PropertyMapperGrouping {
                         .isEnabled(CachingPropertyMappers::remoteHostSet, CachingPropertyMappers.REMOTE_HOST_SET)
                         .to("kc.spi-cache-remote--default--backup-sites")
                         .paramLabel("sites")
+                        .build(),
+                fromOption(CachingOptions.CACHE_REDIS_URL)
+                        .isEnabled(CachingPropertyMappers::cacheSetToRedis, "cache is set to 'redis'")
+                        .to("kc.spi-connections-redis--default--url")
+                        .paramLabel("url")
+                        .build(),
+                fromOption(CachingOptions.CACHE_REDIS_USERNAME)
+                        .isEnabled(CachingPropertyMappers::cacheSetToRedis, "cache is set to 'redis'")
+                        .to("kc.spi-connections-redis--default--username")
+                        .paramLabel("username")
+                        .build(),
+                fromOption(CachingOptions.CACHE_REDIS_PASSWORD)
+                        .isEnabled(CachingPropertyMappers::cacheSetToRedis, "cache is set to 'redis'")
+                        .to("kc.spi-connections-redis--default--password")
+                        .paramLabel("password")
+                        .isMasked(true)
+                        .build(),
+                fromOption(CachingOptions.CACHE_REDIS_DATABASE)
+                        .isEnabled(CachingPropertyMappers::cacheSetToRedis, "cache is set to 'redis'")
+                        .to("kc.spi-connections-redis--default--database")
+                        .paramLabel("number")
+                        .build(),
+                fromOption(CachingOptions.CACHE_REDIS_TIMEOUT)
+                        .isEnabled(CachingPropertyMappers::cacheSetToRedis, "cache is set to 'redis'")
+                        .to("kc.spi-connections-redis--default--timeout")
+                        .paramLabel("ms")
+                        .build(),
+                fromOption(CachingOptions.CACHE_REDIS_MAX_POOL_SIZE)
+                        .isEnabled(CachingPropertyMappers::cacheSetToRedis, "cache is set to 'redis'")
+                        .to("kc.spi-connections-redis--default--max-pool-size")
+                        .paramLabel("size")
+                        .build(),
+                fromOption(CachingOptions.CACHE_REDIS_MIN_IDLE)
+                        .isEnabled(CachingPropertyMappers::cacheSetToRedis, "cache is set to 'redis'")
+                        .to("kc.spi-connections-redis--default--min-idle")
+                        .paramLabel("size")
                         .build()
         );
 
@@ -210,6 +246,11 @@ final class CachingPropertyMappers implements PropertyMapperGrouping {
             return true;
         }
         return cache.isPresent() && cache.get().equals(CachingOptions.Mechanism.ispn.name());
+    }
+
+    public static boolean cacheSetToRedis() {
+        Optional<String> cache = getOptionalKcValue(CachingOptions.CACHE);
+        return cache.isPresent() && cache.get().equals(CachingOptions.Mechanism.redis.name());
     }
 
     private static String resolveConfigFile(String value, ConfigSourceInterceptorContext context) {
