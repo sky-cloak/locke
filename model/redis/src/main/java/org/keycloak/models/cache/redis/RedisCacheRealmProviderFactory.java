@@ -29,12 +29,13 @@ import org.keycloak.models.cache.CacheRealmProvider;
 import org.keycloak.models.cache.CacheRealmProviderFactory;
 import org.keycloak.models.cache.redis.entities.Revisioned;
 import org.keycloak.models.cache.redis.events.InvalidationEvent;
+import org.keycloak.provider.EnvironmentDependentProviderFactory;
 
 /**
  * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
  * @author <a href="mailto:sthorger@redhat.com">Stian Thorgersen</a>
  */
-public class RedisCacheRealmProviderFactory implements CacheRealmProviderFactory {
+public class RedisCacheRealmProviderFactory implements CacheRealmProviderFactory, EnvironmentDependentProviderFactory {
 
     private static final Logger log = Logger.getLogger(RedisCacheRealmProviderFactory.class);
     public static final String REALM_CLEAR_CACHE_EVENTS = "REALM_CLEAR_CACHE_EVENTS";
@@ -92,6 +93,13 @@ public class RedisCacheRealmProviderFactory implements CacheRealmProviderFactory
     @Override
     public String getId() {
         return "default";
+    }
+
+    @Override
+    public boolean isSupported(Config.Scope config) {
+        // Only enabled when cache mechanism is set to 'redis'
+        String cacheType = Config.getProvider("cache");
+        return "redis".equals(cacheType);
     }
 
 }

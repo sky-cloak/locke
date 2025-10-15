@@ -29,11 +29,12 @@ import org.keycloak.models.cache.UserCache;
 import org.keycloak.models.cache.UserCacheProviderFactory;
 import org.keycloak.models.cache.redis.entities.Revisioned;
 import org.keycloak.models.cache.redis.events.InvalidationEvent;
+import org.keycloak.provider.EnvironmentDependentProviderFactory;
 
 /**
  * @author <a href="mailto:sthorger@redhat.com">Stian Thorgersen</a>
  */
-public class RedisUserCacheProviderFactory implements UserCacheProviderFactory {
+public class RedisUserCacheProviderFactory implements UserCacheProviderFactory, EnvironmentDependentProviderFactory {
 
     private static final Logger log = Logger.getLogger(RedisUserCacheProviderFactory.class);
     public static final String USER_CLEAR_CACHE_EVENTS = "USER_CLEAR_CACHE_EVENTS";
@@ -94,5 +95,12 @@ public class RedisUserCacheProviderFactory implements UserCacheProviderFactory {
     @Override
     public String getId() {
         return "default";
+    }
+
+    @Override
+    public boolean isSupported(Config.Scope config) {
+        // Only enabled when cache mechanism is set to 'redis'
+        String cacheType = Config.getProvider("cache");
+        return "redis".equals(cacheType);
     }
 }

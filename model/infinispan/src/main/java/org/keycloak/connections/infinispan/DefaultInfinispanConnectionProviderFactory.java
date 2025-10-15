@@ -47,6 +47,7 @@ import org.keycloak.models.sessions.infinispan.remote.RemoteInfinispanAuthentica
 import org.keycloak.models.sessions.infinispan.remote.RemoteUserLoginFailureProviderFactory;
 import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.models.utils.PostMigrationEvent;
+import org.keycloak.provider.EnvironmentDependentProviderFactory;
 import org.keycloak.provider.InvalidationHandler.ObjectType;
 import org.keycloak.provider.Provider;
 import org.keycloak.provider.ProviderEvent;
@@ -85,7 +86,7 @@ import static org.keycloak.models.cache.infinispan.InfinispanCacheRealmProviderF
 /**
  * @author <a href="mailto:sthorger@redhat.com">Stian Thorgersen</a>
  */
-public class DefaultInfinispanConnectionProviderFactory implements InfinispanConnectionProviderFactory, ProviderEventListener, ServerInfoAwareProviderFactory {
+public class DefaultInfinispanConnectionProviderFactory implements InfinispanConnectionProviderFactory, ProviderEventListener, ServerInfoAwareProviderFactory, EnvironmentDependentProviderFactory {
 
     private static final ReadWriteLock READ_WRITE_LOCK = new ReentrantReadWriteLock();
     private static final Logger logger = Logger.getLogger(DefaultInfinispanConnectionProviderFactory.class);
@@ -340,5 +341,12 @@ public class DefaultInfinispanConnectionProviderFactory implements InfinispanCon
 
     private void addRemoteOperationalInfo(Map<String, String> info) {
         info.put("connectionCount", Integer.toString(remoteCacheManager.getConnectionCount()));
+    }
+
+    @Override
+    public boolean isSupported(Config.Scope config) {
+        // Enabled for 'ispn' or 'local' but NOT for 'redis'
+        String cacheType = Config.getProvider("cache");
+        return !"redis".equals(cacheType);
     }
 }

@@ -27,6 +27,7 @@ import org.keycloak.models.cache.CacheRealmProvider;
 import org.keycloak.models.cache.CacheRealmProviderFactory;
 import org.keycloak.models.cache.infinispan.entities.Revisioned;
 import org.keycloak.models.cache.infinispan.events.InvalidationEvent;
+import org.keycloak.provider.EnvironmentDependentProviderFactory;
 
 import org.infinispan.Cache;
 import org.jboss.logging.Logger;
@@ -35,7 +36,7 @@ import org.jboss.logging.Logger;
  * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
  * @author <a href="mailto:sthorger@redhat.com">Stian Thorgersen</a>
  */
-public class InfinispanCacheRealmProviderFactory implements CacheRealmProviderFactory {
+public class InfinispanCacheRealmProviderFactory implements CacheRealmProviderFactory, EnvironmentDependentProviderFactory {
 
     private static final Logger log = Logger.getLogger(InfinispanCacheRealmProviderFactory.class);
     public static final String REALM_CLEAR_CACHE_EVENTS = "REALM_CLEAR_CACHE_EVENTS";
@@ -93,6 +94,13 @@ public class InfinispanCacheRealmProviderFactory implements CacheRealmProviderFa
     @Override
     public String getId() {
         return "default";
+    }
+
+    @Override
+    public boolean isSupported(Config.Scope config) {
+        // Enabled for 'ispn' or 'local' but NOT for 'redis'
+        String cacheType = Config.getProvider("cache");
+        return !"redis".equals(cacheType);
     }
 
 }
