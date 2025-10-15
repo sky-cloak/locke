@@ -52,16 +52,14 @@ public class UserCacheManager extends CacheManager {
 
     public void userUpdatedInvalidations(String userId, String username, String email, String realmId, Set<String> invalidations) {
         invalidations.add(userId);
-        // TODO Phase 3.2: UserCacheSession will be implemented in Phase 3.2
-        // if (email != null) invalidations.add(UserCacheSession.getUserByEmailCacheKey(realmId, email));
-        // invalidations.add(UserCacheSession.getUserByUsernameCacheKey(realmId, username));
+        if (email != null) invalidations.add(UserCacheSession.getUserByEmailCacheKey(realmId, email));
+        invalidations.add(UserCacheSession.getUserByUsernameCacheKey(realmId, username));
     }
 
     // Fully invalidate user including consents and federatedIdentity links.
     public void fullUserInvalidation(String userId, String username, String email, String realmId, boolean identityFederationEnabled, Map<String, String> federatedIdentities, Set<String> invalidations) {
         userUpdatedInvalidations(userId, username, email, realmId, invalidations);
-        // TODO Phase 3.2: UserCacheSession will be implemented in Phase 3.2
-        /*
+
         if (identityFederationEnabled) {
             // Invalidate all keys for lookup this user by any identityProvider link
             for (Map.Entry<String, String> socialLink : federatedIdentities.entrySet()) {
@@ -75,23 +73,21 @@ public class UserCacheManager extends CacheManager {
 
         // Consents
         invalidations.add(UserCacheSession.getConsentCacheKey(userId));
-        */
     }
 
     public void federatedIdentityLinkUpdatedInvalidation(String userId, Set<String> invalidations) {
-        // TODO Phase 3.2: invalidations.add(UserCacheSession.getFederatedIdentityLinksCacheKey(userId));
+        invalidations.add(UserCacheSession.getFederatedIdentityLinksCacheKey(userId));
     }
 
     public void federatedIdentityLinkRemovedInvalidation(String userId, String realmId, String identityProviderId, String socialUserId, Set<String> invalidations) {
-        // TODO Phase 3.2:
-        // invalidations.add(UserCacheSession.getFederatedIdentityLinksCacheKey(userId));
-        // if (identityProviderId != null) {
-        //     invalidations.add(UserCacheSession.getUserByFederatedIdentityCacheKey(realmId, identityProviderId, socialUserId));
-        // }
+        invalidations.add(UserCacheSession.getFederatedIdentityLinksCacheKey(userId));
+        if (identityProviderId != null) {
+            invalidations.add(UserCacheSession.getUserByFederatedIdentityCacheKey(realmId, identityProviderId, socialUserId));
+        }
     }
 
     public void consentInvalidation(String userId, Set<String> invalidations) {
-        // TODO Phase 3.2: invalidations.add(UserCacheSession.getConsentCacheKey(userId));
+        invalidations.add(UserCacheSession.getConsentCacheKey(userId));
     }
 
 
