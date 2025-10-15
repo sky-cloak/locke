@@ -183,7 +183,7 @@ public class RealmCacheSession implements CacheRealmProvider {
     @Override
     public void clear() {
         ClusterProvider cluster = session.getProvider(ClusterProvider.class);
-        cluster.notify(InfinispanCacheRealmProviderFactory.REALM_CLEAR_CACHE_EVENTS, ClearCacheEvent.getInstance(), false);
+        cluster.notify(RedisCacheRealmProviderFactory.REALM_CLEAR_CACHE_EVENTS, ClearCacheEvent.getInstance(), false);
     }
 
     @Override
@@ -352,7 +352,7 @@ public class RealmCacheSession implements CacheRealmProvider {
             cache.invalidateObject(id);
         }
 
-        cache.sendInvalidationEvents(session, invalidationEvents, InfinispanCacheRealmProviderFactory.REALM_INVALIDATION_EVENTS);
+        cache.sendInvalidationEvents(session, invalidationEvents, RedisCacheRealmProviderFactory.REALM_INVALIDATION_EVENTS);
     }
 
     private KeycloakTransaction getPrepareTransaction() {

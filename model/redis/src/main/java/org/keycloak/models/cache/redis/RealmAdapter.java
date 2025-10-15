@@ -408,8 +408,9 @@ public class RealmAdapter implements CachedRealmModel {
             session.getTransactionManager().enlistAfterCompletion(new AbstractKeycloakTransaction() {
                 @Override
                 protected void commitImpl() {
-                    ClusterProvider cluster = session.getProvider(ClusterProvider.class);
-                    cluster.notify(InfinispanUserCacheProviderFactory.USER_CLEAR_CACHE_EVENTS, ClearCacheEvent.getInstance(), false);
+                    // TODO Phase 3.2: Re-enable when UserCacheProvider is implemented
+                    // ClusterProvider cluster = session.getProvider(ClusterProvider.class);
+                    // cluster.notify(RedisUserCacheProviderFactory.USER_CLEAR_CACHE_EVENTS, ClearCacheEvent.getInstance(), false);
                 }
 
                 @Override
