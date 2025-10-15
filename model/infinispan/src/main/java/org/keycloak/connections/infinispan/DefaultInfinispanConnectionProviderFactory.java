@@ -272,18 +272,23 @@ public class DefaultInfinispanConnectionProviderFactory implements InfinispanCon
     private void registerSystemWideListeners(KeycloakSession session) {
         KeycloakSessionFactory sessionFactory = session.getKeycloakSessionFactory();
         ClusterProvider cluster = session.getProvider(ClusterProvider.class);
-        cluster.registerListener(REALM_CLEAR_CACHE_EVENTS, (ClusterEvent event) -> {
-            if (event instanceof ClearCacheEvent) {
-                sessionFactory.invalidate(null, ObjectType._ALL_);
-            }
-        });
-        cluster.registerListener(REALM_INVALIDATION_EVENTS, (ClusterEvent event) -> {
-            if (event instanceof RealmUpdatedEvent rr) {
-                sessionFactory.invalidate(null, ObjectType.REALM, rr.getId());
-            } else if (event instanceof RealmRemovedEvent rr) {
-                sessionFactory.invalidate(null, ObjectType.REALM, rr.getId());
-            }
-        });
+        if (cluster != null) {
+            cluster.registerListener(REALM_CLEAR_CACHE_EVENTS, (ClusterEvent event) -> {
+                if (event instanceof ClearCacheEvent) {
+                    sessionFactory.invalidate(null, ObjectType._ALL_);
+                }
+            });
+            cluster.registerListener(REALM_INVALIDATION_EVENTS, (ClusterEvent event) -> {
+                if (event instanceof RealmUpdatedEvent rr) {
+                    sessionFactory.invalidate(null, ObjectType.REALM, rr.getId());
+                } else if (event instanceof RealmRemovedEvent rr) {
+                    sessionFactory.invalidate(null, ObjectType.REALM, rr.getId());
+                }
+            });
+            logger.debug("Registered system-wide cluster listeners");
+        } else {
+            logger.debug("ClusterProvider not available, skipping system-wide listener registration");
+        }
     }
 
     private void injectKeycloakTimeService(EmbeddedCacheManager cacheManager) {

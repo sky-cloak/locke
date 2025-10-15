@@ -59,20 +59,24 @@ public class InfinispanCacheRealmProviderFactory implements CacheRealmProviderFa
                     realmCache = new RealmCacheManager(cache, revisions);
 
                     ClusterProvider cluster = session.getProvider(ClusterProvider.class);
-                    cluster.registerListener(REALM_INVALIDATION_EVENTS, (ClusterEvent event) -> {
+                    if (cluster != null) {
+                        cluster.registerListener(REALM_INVALIDATION_EVENTS, (ClusterEvent event) -> {
 
-                        InvalidationEvent invalidationEvent = (InvalidationEvent) event;
-                        realmCache.invalidationEventReceived(invalidationEvent);
+                            InvalidationEvent invalidationEvent = (InvalidationEvent) event;
+                            realmCache.invalidationEventReceived(invalidationEvent);
 
-                    });
+                        });
 
-                    cluster.registerListener(REALM_CLEAR_CACHE_EVENTS, (ClusterEvent event) -> {
+                        cluster.registerListener(REALM_CLEAR_CACHE_EVENTS, (ClusterEvent event) -> {
 
-                        realmCache.clear();
+                            realmCache.clear();
 
-                    });
+                        });
 
-                    log.debug("Registered cluster listeners");
+                        log.debug("Registered cluster listeners");
+                    } else {
+                        log.debug("ClusterProvider not available, skipping cluster listener registration");
+                    }
                 }
             }
         }
