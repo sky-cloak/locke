@@ -108,6 +108,12 @@ public class JWTAuthorizationGrantType extends OAuth2GrantTypeBase {
             if (user == null) {
                 throw new RuntimeException("User not found");
             }
+            if (!user.isEnabled()) {
+                throw new RuntimeException("User is not enabled");
+            }
+            if (user.getRequiredActionsStream().findAny().isPresent()) {
+                throw new RuntimeException("Account is not fully set up");
+            }
             event.user(user);
             event.detail(Details.USERNAME, user.getUsername());
 
