@@ -40,6 +40,8 @@ The exact processing that {project_name} performs over the assertion is the foll
 . Other claims like `nbf` (not before), `iat` (issued at) and `jti` (JWT ID) can be present and should be validated in that case.
 . The JWT should be signed and its signature should be verified with the keys associated to the identity provider in {project_name}.
 
+NOTE: Brute force protection is not applied to the JWT Authorization Grant for temporarily locked users, since this grant type does not perform user credential-based authentication but relies on an assertion issued by an external identity provider, and therefore cannot be compromised by brute force attacks on credentials of {project_name} user.
+
 == Configuration
 
 Only confidential clients can request a JWT authorization grant. In order to allow a client to send such a grant, the client should be configured accordingly. Using the admin console, **clients** -> select your client -> **Settings** tab -> **Capability config** section.
