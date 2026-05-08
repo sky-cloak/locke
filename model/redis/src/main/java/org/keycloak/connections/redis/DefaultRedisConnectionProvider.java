@@ -22,6 +22,7 @@ import org.keycloak.cache.redis.L1InvalidationBus;
 import org.keycloak.cache.redis.L1RedisCache;
 import org.keycloak.cache.redis.LettuceCacheAdapter;
 import org.keycloak.cache.redis.LuaScripts;
+import org.keycloak.cache.redis.NoOpRedisCache;
 import org.keycloak.cache.redis.PipelinedRedisCache;
 import org.keycloak.cache.redis.RedisCache;
 import org.keycloak.cache.redis.RedisMetrics;
@@ -82,6 +83,35 @@ public class DefaultRedisConnectionProvider implements RedisConnectionProvider {
         return false;
     }
 
+    /**
+     * Caches whose values reference {@link org.keycloak.models.cache.redis.DefaultLazyLoader}
+     * — which holds non-Serializable lambda fields ({@code Function}/{@code Supplier}). These
+     * cannot pass through {@link LettuceCacheAdapter}'s Java-native serialization, and
+     * Protostream isn't an option either because the Cached* entities don't carry
+     * {@code @ProtoField} annotations.
+     *
+     * <p>The pragmatic architecture: keep them L1-only (Caffeine in-JVM) with cross-node
+     * invalidation via Redis pub/sub. Each pod loads from JPA on miss, exactly the behavior
+     * Infinispan provides for its local cache mode. PostgreSQL remains the source of truth.
+     *
+     * <p>The {@link L1RedisCache} wrapper still applies — it provides the Caffeine layer and
+     * the bus subscription. Only the L2 delegate is swapped to {@link NoOpRedisCache}.
+     */
+    private static final Set<String> L1_ONLY_PREFIXES = Set.of(
+            "realms", "realmRevisions",
+            "users", "userRevisions",
+            "authorization", "authorizationRevisions",
+            "keys", "crl"
+    );
+
+    private static boolean shouldUseL1Only(String cacheName) {
+        if (cacheName == null) return false;
+        for (String prefix : L1_ONLY_PREFIXES) {
+            if (cacheName.equals(prefix) || cacheName.startsWith(prefix + ":")) return true;
+        }
+        return false;
+    }
+
     public DefaultRedisConnectionProvider(RedisClientManager clientManager,
                                           RedissonClient redissonClient,
                                           TopologyInfo topologyInfo,
@@ -115,6 +145,19 @@ public class DefaultRedisConnectionProvider implements RedisConnectionProvider {
         }
 
         return (RedisCache<K, V>) caches.computeIfAbsent(name, cacheName -> {
+            // L1-only path: read-mostly caches whose entities reference DefaultLazyLoader
+            // (lambda fields → not Java-serializable). Caffeine in-JVM + cross-pod
+            // invalidation via the L1 bus; PostgreSQL is source of truth, each pod loads
+            // from JPA on cache miss. Same model as Infinispan's local cache mode.
+            if (shouldUseL1Only(cacheName) && l1Bus != null) {
+                NoOpRedisCache<K, V> noOpL2 = new NoOpRedisCache<>(cacheName);
+                return new L1RedisCache<>(noOpL2,
+                        // Synthesize a stable byte key for the L1 layer / invalidation channel.
+                        // Java toString is enough — keys are realm/user/role IDs (UUIDs/strings).
+                        k -> (cacheName + ":" + k).getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                        l1Bus, l1Config, metrics);
+            }
+
             LettuceCacheAdapter<K, V> l2 = new LettuceCacheAdapter<>(cacheName, clientManager, metrics);
             // L1 bypass for: cluster mode (no shared bus), or caches with unique-per-request
             // keys where L1 only adds publish overhead without hit benefit.

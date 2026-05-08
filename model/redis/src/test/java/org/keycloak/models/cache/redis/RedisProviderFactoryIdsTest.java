@@ -37,27 +37,21 @@ import static org.hamcrest.Matchers.not;
  */
 public class RedisProviderFactoryIdsTest {
 
-    // ----- Known issue: realm/user/authorization cache providers temporarily reverted
-    //       to id="default" pending iter-7 Protostream migration. See the getId() comments
-    //       in those factories for context. When iter-7 fixes the Serializable cascade
-    //       through DefaultLazyLoader and the Cached* entities, change these back to "redis"
-    //       and re-enable the assertions below.
+    // Iter-7 restored the "redis" ids for realm/user/authorization. The L1-only routing
+    // in DefaultRedisConnectionProvider sidesteps the DefaultLazyLoader serialization cascade.
 
-    @org.junit.Ignore("Iter-7: Protostream migration needed for Cached* entities (DefaultLazyLoader Serializable cascade)")
     @Test
     public void redisCacheRealmProviderFactory_idIsRedis_notDefault() {
         assertThat(new RedisCacheRealmProviderFactory().getId(), equalTo("redis"));
         assertThat(new RedisCacheRealmProviderFactory().getId(), not(equalTo("default")));
     }
 
-    @org.junit.Ignore("Iter-7: same Protostream migration as above")
     @Test
     public void redisUserCacheProviderFactory_idIsRedis_notDefault() {
         assertThat(new RedisUserCacheProviderFactory().getId(), equalTo("redis"));
         assertThat(new RedisUserCacheProviderFactory().getId(), not(equalTo("default")));
     }
 
-    @org.junit.Ignore("Iter-7: same Protostream migration as above")
     @Test
     public void redisCacheStoreFactoryProviderFactory_idIsRedis_notDefault() {
         assertThat(new RedisCacheStoreFactoryProviderFactory().getId(), equalTo("redis"));
