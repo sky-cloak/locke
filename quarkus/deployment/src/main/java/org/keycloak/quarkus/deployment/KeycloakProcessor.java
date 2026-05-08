@@ -845,13 +845,6 @@ class KeycloakProcessor {
         if (cacheType.isPresent() && cacheType.get().equals(CachingOptions.Mechanism.redis.name())) {
             logger.infof("Redis cache mechanism detected, indexing keycloak-model-redis");
             indexDependencyBuildItemBuildProducer.produce(new IndexDependencyBuildItem("org.keycloak", "keycloak-model-redis"));
-
-            // Validate required Redis configuration
-            Optional<String> redisUrl = getOptionalKcValue(CachingOptions.CACHE_REDIS_URL.getKey());
-            if (redisUrl.isEmpty()) {
-                throwConfigError("Redis cache is enabled (--cache=redis) but no Redis URL is configured. " +
-                        "Please specify --cache-redis-url=redis://host:port");
-            }
         }
     }
 

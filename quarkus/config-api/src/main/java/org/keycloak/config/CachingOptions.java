@@ -46,6 +46,7 @@ public class CachingOptions {
 
     public static final Option<Mechanism> CACHE = new OptionBuilder<>("cache", Mechanism.class)
             .category(OptionCategory.CACHE)
+            .buildTime(true)
             .description("Defines the cache mechanism for high-availability. "
                     + "By default in production mode, a 'ispn' cache is used to create a cluster between multiple server nodes. "
                     + "By default in development mode, a 'local' cache disables clustering and is intended for development and testing purposes. "

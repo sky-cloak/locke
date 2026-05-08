@@ -103,8 +103,6 @@ public class InfinispanUserCacheProviderFactory implements UserCacheProviderFact
 
     @Override
     public boolean isSupported(Config.Scope config) {
-        // Enabled for 'ispn' or 'local' but NOT for 'redis'
-        String cacheType = Config.getProvider("cache");
-        return !"redis".equals(cacheType);
+        return !"redis".equals(config.root().get("cache"));
     }
 }

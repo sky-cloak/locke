@@ -36,7 +36,7 @@ public class KeycloakClusterReadyHealthCheckProducer {
     public AsyncHealthCheck createHealthCheck() {
         var sessionFactory = QuarkusKeycloakSessionFactory.getInstance();
         InfinispanConnectionProviderFactory factory = (InfinispanConnectionProviderFactory) sessionFactory.getProviderFactory(InfinispanConnectionProvider.class);
-        if (factory.isClusterHealthSupported()) {
+        if (factory != null && factory.isClusterHealthSupported()) {
             return new KeycloakClusterReadyHealthCheck();
         } else {
             return null;
