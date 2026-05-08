@@ -26,6 +26,9 @@ import org.keycloak.models.cache.redis.entities.CachedGroup;
 import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.models.utils.RoleUtils;
 
+import org.keycloak.organization.OrganizationProvider;
+import org.keycloak.models.OrganizationModel;
+
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -308,5 +311,22 @@ public class GroupAdapter implements GroupModel {
     public Type getType() {
         if (isUpdated()) return updated.getType();
         return cached.getType();
+    }
+
+    @Override
+    public OrganizationModel getOrganization() {
+        if (isUpdated()) return updated.getOrganization();
+
+        String orgId = cached.getOrganizationId();
+        if (orgId == null) {
+            return null;
+        }
+
+        OrganizationProvider orgProvider = keycloakSession.getProvider(OrganizationProvider.class);
+        if (orgProvider == null) {
+            return null;
+        }
+
+        return orgProvider.getById(orgId);
     }
 }

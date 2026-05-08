@@ -243,8 +243,8 @@ public class RedisConnectionConfig {
         private String sentinelMasterId;
         private String password;
         private int database = 0;
-        private int poolMinSize = 5;
-        private int poolMaxSize = 20;
+        private int poolMinSize = 16;
+        private int poolMaxSize = 64;
         private Duration timeout = Duration.ofMillis(2000);
         private int retryAttempts = 3;
         private Duration retryDelay = Duration.ofMillis(100);

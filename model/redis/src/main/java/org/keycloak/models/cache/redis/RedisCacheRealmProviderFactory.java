@@ -92,14 +92,28 @@ public class RedisCacheRealmProviderFactory implements CacheRealmProviderFactory
 
     @Override
     public String getId() {
+        // KNOWN ISSUE — temporarily returning "default" so this factory loses ProviderManager
+        // dedup against InfinispanCacheRealmProviderFactory (Infinispan keeps serving realm
+        // cache even when KC_CACHE=redis). This was iter-6's correct fix, BUT it activated
+        // a deeper bug: CachedRealmRole and other entities reference DefaultLazyLoader which
+        // holds non-Serializable Function/Supplier lambda fields, so the LettuceCacheAdapter's
+        // Java-native serialization fails at startup with "Failed to serialize object:
+        // org.keycloak.models.cache.redis.entities.CachedRealmRole".
+        //
+        // Real fix (iter-7 scope): register Cached* entities in RedisModelSchema and serialize
+        // via Protostream instead of Java native. That's how Infinispan does it. Tracked in
+        // docs/redis-iterations/iteration-6-prometheus-metrics.md "Known issues".
+        //
+        // Auth sessions, single-use objects, login failures, user sessions still go to Redis
+        // correctly because their factories use getId()="redis" (different from Infinispan's
+        // "infinispan") — they survive ProviderManager dedup naturally. Only the three cache
+        // providers (realm, user, authorization) use the "default" id and need the iter-7 work.
         return "default";
     }
 
     @Override
     public boolean isSupported(Config.Scope config) {
-        // Only enabled when cache mechanism is set to 'redis'
-        String cacheType = Config.getProvider("cache");
-        return "redis".equals(cacheType);
+        return "redis".equals(config.root().get("cache"));
     }
 
 }

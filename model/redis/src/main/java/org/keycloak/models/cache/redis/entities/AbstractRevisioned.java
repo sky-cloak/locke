@@ -9,7 +9,9 @@ import java.io.Serializable;
  * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
  * @version $Revision: 1 $
  */
-public class AbstractRevisioned implements Revisioned, CachedObject {
+public class AbstractRevisioned implements Revisioned, CachedObject, Serializable {
+    private static final long serialVersionUID = 1L;
+
     private final String id;
     private Long revision;
     private final long cacheTimestamp = Time.currentTimeMillis();

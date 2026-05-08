@@ -21,6 +21,9 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Stream;
 
+import org.keycloak.cache.redis.HashCacheAdapter;
+import org.keycloak.cache.redis.LuaScripts;
+import org.keycloak.cache.redis.PipelinedRedisCache;
 import org.keycloak.cache.redis.RedisCache;
 import org.keycloak.provider.Provider;
 
@@ -118,6 +121,35 @@ public interface RedisConnectionProvider extends Provider {
      * @return cache instance, or null if createIfAbsent is false and cache doesn't exist
      */
     <K, V> RedisCache<K, V> getCache(String name, boolean createIfAbsent);
+
+    /**
+     * Get a hash-shaped cache adapter ({@code HSET / HGETALL} storage) by name.
+     *
+     * <p>Use this instead of {@link #getCache} when entities map naturally to a
+     * field-keyed structure (e.g. login-failure counters, session attributes).
+     * Field-level updates avoid the read-modify-write of opaque-value caches.
+     *
+     * @param name cache name (matches the Redis key prefix)
+     * @return hash cache adapter
+     */
+    <K> HashCacheAdapter<K> getHashCache(String name);
+
+    /**
+     * Get the Lua script holder for atomic compare-and-set operations.
+     * Scripts are loaded once per server; subsequent calls use {@code EVALSHA}.
+     *
+     * @return Lua script holder, or null if not available
+     */
+    LuaScripts getLuaScripts();
+
+    /**
+     * Begin a pipelined batch of Redis writes. Use within a try-with-resources
+     * block. The batch returns immediately on each call and awaits all responses
+     * on close — collapsing N round-trips into one network window.
+     *
+     * @return a fresh pipeline batch
+     */
+    PipelinedRedisCache.Batch beginPipelineBatch();
 
     /**
      * Get topology information for cluster awareness.

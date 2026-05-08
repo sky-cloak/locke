@@ -22,7 +22,7 @@ import java.io.IOException;
 import org.infinispan.protostream.ProtobufUtil;
 import org.infinispan.protostream.SerializationContext;
 import org.jboss.logging.Logger;
-import org.keycloak.marshalling.Marshalling;
+import org.keycloak.marshalling.redis.RedisModelSchema;
 
 /**
  * Redis serializer that uses Protocol Buffers (Protostream) for serialization.
@@ -51,18 +51,26 @@ public class ProtobufRedisSerializer<T> {
     }
 
     /**
-     * Create a serialization context with all Keycloak schemas registered.
-     * This reuses the same schemas as Infinispan.
+     * Create a serialization context registering only the Redis-package Protostream
+     * classes via {@link RedisModelSchema}.
+     *
+     * <p>Earlier this used {@code Marshalling.getSchemas()} which iterated
+     * every {@code SerializationContextInitializer} on the classpath — but that
+     * service-loader call only ever returned the Infinispan-package schema
+     * (no Redis schema existed). Result: redis-package types like
+     * {@code WrapperClusterEvent} had no marshaller, and every
+     * {@code RedisPubSubEventManager.publishEvent} threw and logged at ERROR.
+     *
+     * <p>{@link RedisModelSchema} now lists every redis-package
+     * {@code @ProtoTypeId} class and is registered explicitly here. Note: the
+     * Redis and Infinispan schemas use the same numeric ids (intentional —
+     * they're parallel implementations) and are never coexistent in one context;
+     * each backend's serializer wires its own.
      */
     private SerializationContext createSerializationContext() {
         SerializationContext ctx = ProtobufUtil.newSerializationContext();
-
-        // Register all Keycloak Protostream schemas (same as Infinispan)
-        Marshalling.getSchemas().forEach(schema -> {
-            schema.registerSchema(ctx);
-            schema.registerMarshallers(ctx);
-        });
-
+        RedisModelSchema.INSTANCE.registerSchema(ctx);
+        RedisModelSchema.INSTANCE.registerMarshallers(ctx);
         return ctx;
     }
 

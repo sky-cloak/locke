@@ -92,14 +92,15 @@ public class RedisCacheStoreFactoryProviderFactory implements CachedStoreProvide
 
     @Override
     public String getId() {
+        // See RedisCacheRealmProviderFactory.getId — temporarily reverted to "default" pending
+        // iter-7 Protostream migration. Same Serializable cascade applies via CachedPolicy/
+        // CachedScope and friends.
         return "default";
     }
 
     @Override
     public boolean isSupported(Config.Scope config) {
-        // Only enabled when cache mechanism is set to 'redis'
-        String cacheType = Config.getProvider("cache");
-        return "redis".equals(cacheType);
+        return "redis".equals(config.root().get("cache"));
     }
 
 }
