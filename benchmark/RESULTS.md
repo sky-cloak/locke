@@ -181,6 +181,40 @@ This is the topology where vanilla Infinispan pays its real-world cost: 3 KC pod
 
 **Throughput now matches vanilla at 1-pod** (34.37 vs 34.6 RPS).
 
+## Iteration 7 — L1-only routing for realm/user/authz caches
+
+**Date**: 2026-05-08, kcb (official Gatling), 10 users/sec for 60 s, AuthorizationCode.
+
+**Architectural change**: realm/user/authorization caches now route through `NoOpRedisCache` as L2 stub — Caffeine in-JVM + pub/sub invalidation only. PostgreSQL is the source of truth; each pod loads from JPA on miss. Sidesteps the `DefaultLazyLoader` Serializable cascade entirely.
+
+`getId="redis"` is now fully active on all 9 Redis factories. **No more silent fallback to Infinispan** for any cache type.
+
+### 1-pod
+
+| | A vanilla | B iter-6 | **B iter-7** | iter-7 vs iter-6 | iter-7 vs vanilla |
+|---|---|---|---|---|---|
+| RPS | 34.7 | 34.5 | **34.5** | tied | 99 % |
+| **Mean** | 19 ms | 69 ms | **23 ms** | **-67 %** | **+21 %** |
+| p99 | 172 ms | 687 ms | **259 ms** | **-62 %** | +51 % |
+
+**Mean response time within 21 % of vanilla — closest single-pod parity in any iteration.**
+
+### 3-pod (least_conn)
+
+| | A3 vanilla | B3 iter-6 | **B3 iter-7** | iter-7 vs iter-6 | iter-7 vs vanilla |
+|---|---|---|---|---|---|
+| RPS | 34.8 | 34.5 | **34.5** | tied | 99 % |
+| **Mean** | 30 ms | 199 ms | **108 ms** | **-46 %** | 3.6 × |
+| p99 | 777 ms | 2607 ms | **1985 ms** | **-24 %** | 2.6 × |
+
+### What's no longer broken
+
+Earlier disclosure ("realm/user/authz cache silently runs on Infinispan even when `KC_CACHE=redis`") is **fixed**. Verified via startup logs — six L1-attached cache instances active for `realms / realmRevisions / users / userRevisions / authorization / authorizationRevisions`. KC no longer crashes on `Failed to serialize CachedRealmRole`.
+
+### Remaining gap to vanilla
+
+Auth-session / single-use / login-failure paths still go to Redis with ~14 HSETs per login, which is the dominant 3-pod latency cost. That's network — no architectural fix beyond reducing the number of cache hits per login (bloom-filter revocation list, JWT-first paths — iter-8 candidates).
+
 ## Iteration 6 — Final benchmark (post-marshaller-fix, post-Serializable-fix-revert)
 
 **Run date**: 2026-05-08, kcb (official Gatling), 10 users/sec for 60 s, AuthorizationCode scenario.

@@ -92,10 +92,9 @@ public class RedisCacheStoreFactoryProviderFactory implements CachedStoreProvide
 
     @Override
     public String getId() {
-        // See RedisCacheRealmProviderFactory.getId — temporarily reverted to "default" pending
-        // iter-7 Protostream migration. Same Serializable cascade applies via CachedPolicy/
-        // CachedScope and friends.
-        return "default";
+        // See RedisCacheRealmProviderFactory.getId — must differ from Infinispan's "default".
+        // Iter-7 routes authorization through L1-only mode.
+        return "redis";
     }
 
     @Override

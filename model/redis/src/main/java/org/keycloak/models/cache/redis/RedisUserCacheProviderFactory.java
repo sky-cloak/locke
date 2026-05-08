@@ -94,10 +94,10 @@ public class RedisUserCacheProviderFactory implements UserCacheProviderFactory, 
 
     @Override
     public String getId() {
-        // See RedisCacheRealmProviderFactory.getId — temporarily reverted to "default" pending
-        // the iter-7 Protostream migration for Cached* entities. Same Serializable issue
-        // applies (CachedUser → AbstractRevisioned → DefaultLazyLoader lambdas).
-        return "default";
+        // See RedisCacheRealmProviderFactory.getId — must differ from Infinispan's "default".
+        // Iter-7 routes the user cache through L1-only mode (Caffeine + pub/sub, no L2
+        // serialization) so the DefaultLazyLoader cascade is moot.
+        return "redis";
     }
 
     @Override

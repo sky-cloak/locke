@@ -14,6 +14,7 @@ point-in-time snapshot: what changed, why, what was measured, what came next.
 | 4 | [Provider migration onto Tier 2 infra](iteration-4-provider-migration.md) | LoginFailureProvider on HSET (field-level updates); SingleUseObject on GETDEL (atomic 1-RT remove); auth-session deferred for tree refactor | shipped (2 of 3) |
 | 5 | [Auth-session HSET refactor + pipelining](iteration-5-auth-session-hset.md) | Auth-session entity stored as one hash; field-level updates on setTimestamp/onChildUpdated; pipelined HSET+EXPIRE = 1 RT (fixed a 2-RT regression); 1-pod mean 1376 → 655 ms | shipped |
 | 6 | [Prometheus metrics surface + provider activation fix](iteration-6-prometheus-metrics.md) | RedisMetrics holder; `keycloak_redis_*` family at `/metrics`; **diagnosed + fixed the silent realm-cache disablement** (Redis cache factories' `getId` collided with Infinispan's "default" → ProviderManager dropped them before `isSupported` ran); also **fixed the WrapperClusterEvent marshaller error flood** by adding `RedisModelSchema` | shipped |
+| 7 | [L1-only routing for realm/user/authz caches](iteration-7-l1-only-routing.md) | NoOpRedisCache as L2 stub; realm/user/authz/keys caches use Caffeine + pub/sub but skip Redis L2 storage entirely (sidesteps the DefaultLazyLoader Serializable cascade); **getId="redis" fully restored** for all 9 Redis factories; 1-pod mean **69 → 23 ms** (within 21 % of vanilla), 3-pod mean **199 → 108 ms** | shipped |
 
 ## How to read these
 
