@@ -105,8 +105,10 @@ public class RedisConnectionConfigTest {
 
         // Then
         assertThat(config, notNullValue());
-        assertThat(config.getPoolMinSize(), equalTo(5));
-        assertThat(config.getPoolMaxSize(), equalTo(20));
+        // Defaults bumped from 5/20 -> 16/64 to match production sizing
+        // (perf-tuned away from Lettuce defaults that thrashed at >20 concurrent VUs).
+        assertThat(config.getPoolMinSize(), equalTo(16));
+        assertThat(config.getPoolMaxSize(), equalTo(64));
         assertThat(config.getRetryAttempts(), equalTo(3));
         assertThat(config.getTimeout().toMillis(), equalTo(2000L));
     }

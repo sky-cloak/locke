@@ -156,14 +156,13 @@ public class RedisConnectionProviderTest {
         assertThat(provider2, sameInstance(provider1));
     }
 
-    @Test(expected = UnsupportedOperationException.class)
-    public void testGetCache_ThrowsException_NotImplementedYet() {
-        // Given
+    @Test
+    public void testGetCache_ReturnsCacheAdapter() {
+        // Cache implementation landed in Milestone 1.3 (LettuceCacheAdapter); this test was
+        // originally written when getCache() was a stub. It now returns a real cache adapter.
         RedisConnectionProvider provider = factory.create(null);
-
-        // When/Then - should throw UnsupportedOperationException
-        // Cache creation deferred to Milestone 1.3
-        provider.getCache("sessions", true);
+        Object cache = provider.getCache("sessions", true);
+        assertThat(cache, notNullValue());
     }
 
     @Test
