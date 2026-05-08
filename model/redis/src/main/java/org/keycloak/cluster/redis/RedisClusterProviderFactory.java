@@ -29,16 +29,15 @@ import org.keycloak.connections.redis.RedisConnectionProvider;
 import org.keycloak.connections.redis.TopologyInfo;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
+import org.keycloak.provider.EnvironmentDependentProviderFactory;
 import org.redisson.api.RMapCache;
 import org.redisson.api.RedissonClient;
 
 /**
  * Factory for creating RedisClusterProvider instances.
  * Manages Redisson client, Pub/Sub manager, and lock manager lifecycle.
- *
- * @author Claude Code
  */
-public class RedisClusterProviderFactory implements ClusterProviderFactory {
+public class RedisClusterProviderFactory implements ClusterProviderFactory, EnvironmentDependentProviderFactory {
 
     protected static final Logger logger = Logger.getLogger(RedisClusterProviderFactory.class);
 
@@ -166,6 +165,16 @@ public class RedisClusterProviderFactory implements ClusterProviderFactory {
             redissonClient = null;
         }
         logger.debug("RedisClusterProviderFactory closed");
+    }
+
+    @Override
+    public boolean isSupported(Config.Scope config) {
+        return "redis".equals(config.root().get("cache"));
+    }
+
+    @Override
+    public int order() {
+        return 1;
     }
 
     @Override

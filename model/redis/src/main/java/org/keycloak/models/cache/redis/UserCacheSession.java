@@ -23,6 +23,7 @@ import static org.keycloak.organization.utils.Organizations.isReadOnlyOrganizati
 import org.jboss.logging.Logger;
 import org.keycloak.cluster.ClusterProvider;
 import org.keycloak.credential.CredentialInput;
+import org.keycloak.credential.UserCredentialManager;
 import org.keycloak.models.ClientScopeModel;
 import org.keycloak.models.CredentialValidationOutput;
 import org.keycloak.models.IdentityProviderModel;
@@ -1036,6 +1037,11 @@ public class UserCacheSession implements UserCache, OnCreateComponent, OnUpdateC
             return ((UserProfileDecorator) getDelegate()).decorateUserProfile(providerId, metadata);
         }
         return List.of();
+    }
+
+    @Override
+    public org.keycloak.models.UserCredentialManager getUserCredentialManager(UserModel user) {
+        return new UserCredentialManager(session, session.getContext().getRealm(), user);
     }
 
     public UserCacheManager getCache() {

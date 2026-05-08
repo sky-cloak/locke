@@ -20,7 +20,9 @@ package org.keycloak.models.cache.redis.entities;
  *
  * @author hmlnarik
  */
-public class NonExistentItem implements Revisioned {
+public class NonExistentItem implements Revisioned, java.io.Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     private final String id;
 

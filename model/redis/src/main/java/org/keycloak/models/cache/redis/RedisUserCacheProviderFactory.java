@@ -94,13 +94,14 @@ public class RedisUserCacheProviderFactory implements UserCacheProviderFactory, 
 
     @Override
     public String getId() {
+        // See RedisCacheRealmProviderFactory.getId — temporarily reverted to "default" pending
+        // the iter-7 Protostream migration for Cached* entities. Same Serializable issue
+        // applies (CachedUser → AbstractRevisioned → DefaultLazyLoader lambdas).
         return "default";
     }
 
     @Override
     public boolean isSupported(Config.Scope config) {
-        // Only enabled when cache mechanism is set to 'redis'
-        String cacheType = Config.getProvider("cache");
-        return "redis".equals(cacheType);
+        return "redis".equals(config.root().get("cache"));
     }
 }
