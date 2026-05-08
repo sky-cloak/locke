@@ -99,8 +99,7 @@ public class CacheRedisDistTest {
     @Test
     @Launch({ "build", "--cache=local", "--cache-redis-url=redis://localhost:6379" })
     void testRedisOptionsIgnoredWhenNotEnabled(CLIResult result) {
-        result.assertBuild();
-        // Redis options should be ignored when cache != redis
-        result.assertNoMessage("Redis cache mechanism detected");
+        // Redis options should be rejected when cache != redis
+        result.assertError("Disabled option: '--cache-redis-url'");
     }
 }

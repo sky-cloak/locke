@@ -340,7 +340,8 @@ public class InfinispanUserSessionProviderFactory implements UserSessionProvider
 
     @Override
     public boolean isSupported(Config.Scope config) {
-        return InfinispanUtils.isEmbeddedInfinispan() || MultiSiteUtils.isPersistentSessionsEnabled();
+        return (InfinispanUtils.isEmbeddedInfinispan() || MultiSiteUtils.isPersistentSessionsEnabled())
+                && !"redis".equals(config.root().get("cache"));
     }
 
     @Override

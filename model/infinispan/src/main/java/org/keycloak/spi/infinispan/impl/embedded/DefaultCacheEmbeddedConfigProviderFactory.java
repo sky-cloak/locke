@@ -35,6 +35,7 @@ import org.keycloak.marshalling.Marshalling;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.models.utils.KeycloakModelUtils;
+import org.keycloak.provider.EnvironmentDependentProviderFactory;
 import org.keycloak.provider.Provider;
 import org.keycloak.provider.ProviderConfigProperty;
 import org.keycloak.provider.ProviderConfigurationBuilder;
@@ -68,7 +69,7 @@ import static org.keycloak.spi.infinispan.impl.embedded.JGroupsConfigurator.crea
  * They have access to the {@link ConfigurationBuilderHolder}, and they can modify it as needed for their custom
  * providers.
  */
-public class DefaultCacheEmbeddedConfigProviderFactory implements CacheEmbeddedConfigProviderFactory {
+public class DefaultCacheEmbeddedConfigProviderFactory implements CacheEmbeddedConfigProviderFactory, EnvironmentDependentProviderFactory {
 
     private static final Logger logger = Logger.getLogger(MethodHandles.lookup().lookupClass());
 
@@ -113,6 +114,10 @@ public class DefaultCacheEmbeddedConfigProviderFactory implements CacheEmbeddedC
     }
 
     @Override
+    public boolean isSupported(Config.Scope config) {
+        return !"redis".equals(config.root().get("cache"));
+    }
+
     public String getId() {
         return PROVIDER_ID;
     }
