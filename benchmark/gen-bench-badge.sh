@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# gen-bench-badge.sh — SKYCA-61.
+# gen-bench-badge.sh (SKYCA-61).
 # Reads the newest clustered parity result and emits:
 #   benchmark/history/badge.json       (shields.io endpoint format, read by README)
 #   benchmark/history/<date>-<sha>.json (one historical data point)
@@ -13,7 +13,7 @@ HIST="$BENCH/history"
 mkdir -p "$HIST"
 
 parity_file=$(ls -t "$BENCH"/load-test/results/*/clustered-426/parity.txt 2>/dev/null | head -1 || true)
-[ -z "${parity_file:-}" ] && { echo "no parity.txt found — run clustered-throughput-sweep.sh first"; exit 2; }
+[ -z "${parity_file:-}" ] && { echo "no parity.txt found; run clustered-throughput-sweep.sh first"; exit 2; }
 
 # parity.txt rows: "load_ups  A3_rps  B3_rps  parity_B/A". Take the highest-load row
 # (saturation is the honest headline; low load already favors Redis).

@@ -12,10 +12,10 @@ below:
     community benefits; we rebase them in. If a fix is urgent for Locke, open it
     here and upstream it in parallel.
 - **Keep the upstream patch surface small.** Locke rebases onto upstream Keycloak
-  `main` daily. Changes that touch upstream files raise rebase cost — prefer
+  `main` daily. Changes that touch upstream files raise rebase cost, so prefer
   keeping new code inside `model/redis/`. If you must touch an upstream file,
   explain why in the PR.
-- **DCO sign-off is required** (`git commit --signoff`), same as upstream — see
+- **DCO sign-off is required** (`git commit --signoff`), same as upstream; see
   the sign-off section below.
 - **Tests are required for behavior changes**, and PRs are expected to be rebased
   on `main` (`git rebase`, not `git pull`). CI runs the test suite and a

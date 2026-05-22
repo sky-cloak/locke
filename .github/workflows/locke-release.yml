@@ -1,4 +1,4 @@
-# Locke — release pipeline.
+# Locke: release pipeline.
 # Triggered by a composite-version tag (e.g. 26.3.5-1 = Keycloak 26.3.5, Locke
 # build 1). Builds the distribution, builds and pushes the container image to
 # GHCR, and cuts a GitHub release.

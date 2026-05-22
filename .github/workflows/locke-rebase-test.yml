@@ -1,4 +1,4 @@
-# Locke — daily rebase test against upstream Keycloak.
+# Locke: daily rebase test against upstream Keycloak.
 # Tells us within hours whether Locke still rebases cleanly onto keycloak/keycloak
 # main, and whether it still builds after the rebase. Opens a tracking issue on
 # failure so a human can resolve the conflict before it compounds.

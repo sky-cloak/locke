@@ -1,5 +1,5 @@
 <!--
-  WHY.md — the receipts page. Tone rules (do not relax):
+  WHY.md: the receipts page. Tone rules (do not relax):
   - Respectful and factual. Quote and link; never editorialize the maintainers' decision.
   - The database-vs-cache table does the persuasion, not adjectives.
   - Items marked <!-- TODO --> need a verbatim quote + permalink pasted in before launch.
@@ -8,13 +8,14 @@
 
 > "The liberty of man, in society, is to be under no other legislative power
 > but that established, by consent, in the commonwealth."
-> — John Locke, *Second Treatise of Government*, §95
+>
+> John Locke, *Second Treatise of Government*, §95
 
 # Why Locke exists
 
 Keycloak is excellent software. This page is not a complaint about it. It is an
 explanation of one design choice we wanted to make differently, and why we built
-a distribution to make it possible — by the operator's consent, not instead of
+a distribution to make it possible, by the operator's consent, not instead of
 the maintainers' judgment.
 
 ## The dilemma
@@ -29,7 +30,7 @@ choose your cache.
 
 The stated reason for keeping the cache fixed is to avoid adding operational
 dependencies. That principle is reasonable. The wrinkle is that Keycloak already
-supports — and for high availability, effectively requires — an **external**
+supports (and for high availability, effectively requires) an **external**
 Infinispan deployment, which is itself a distributed system an operator has to
 stand up, tune, and keep alive. So the "no extra dependency to operate" line and
 the realities of running Keycloak at scale already sit in tension. That tension
@@ -41,10 +42,10 @@ manages for them.
 
 This is not a need we invented.
 
-- **`keycloak/keycloak#24849`** — feature request for a Redis cache option.
+- **`keycloak/keycloak#24849`**: feature request for a Redis cache option.
   36 👍 reactions. Closed 2026-04-29.
   <!-- TODO: paste the closing comment verbatim + permalink. Do not paraphrase. -->
-- **`keycloak/keycloak#13983`** — discussion open since 2022-08-25 asking for the
+- **`keycloak/keycloak#13983`**: discussion open since 2022-08-25 asking for the
   same thing.
 - Operational pain running embedded/external Infinispan in Kubernetes:
   **`keycloak/keycloak#48947`** (OOM), **`#33658`**, **`#46491`**.
@@ -70,14 +71,14 @@ ElastiCache/MemoryDB, Azure Cache for Redis, GCP Memorystore.
   Keycloak it was built from. The Redis path is opt-in.
 - In 3-pod cluster tests, the Redis backend **keeps pace with embedded
   Infinispan at sustained load**. We are validating the exact parity figure on
-  isolated cloud infrastructure before publishing a number — we would rather ship
+  isolated cloud infrastructure before publishing a number. We would rather ship
   a number we can stand behind than a marketing one.
 
 ## What Locke is not
 
 - **Not a replacement for Keycloak.** It is a packaging of it. The code is
   Keycloak: same `org.keycloak.*` packages, same `KC_*` options, same `kc.sh`.
-  This is the Adoptium Temurin / Amazon Corretto / Percona Server pattern — a
+  This is the Adoptium Temurin / Amazon Corretto / Percona Server pattern: a
   distribution of an upstream project, not a competitor to it.
 - **Not a hard fork.** We carry a focused patch set (a handful of upstream files
   plus a self-contained `model/redis/` module) on top of upstream `main`, and a

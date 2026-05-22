@@ -10,7 +10,7 @@ This document tracks the perf-optimization journey from baseline → tuned pool 
 
 ---
 
-## Clustered 3-pod throughput — preliminary (2026-05-21, SKYCF-426)
+## Clustered 3-pod throughput: preliminary (2026-05-21, SKYCF-426)
 
 **This is not a published parity claim.** It is a preliminary single-host run.
 The headline parity number is intentionally being held until it can be reproduced
@@ -18,7 +18,7 @@ on isolated cloud infrastructure (EKS), where the load generator and the Keycloa
 pods do not share a machine.
 
 What changed vs the single-node numbers below: in a **3-pod cluster behind one
-nginx load balancer**, vanilla Keycloak pays its real-world coordination cost —
+nginx load balancer**, vanilla Keycloak pays its real-world coordination cost:
 embedded Infinispan forms a JGroups cluster (3-member view confirmed) and
 replicates across nodes. Locke's Redis backend coordinates via pub/sub against a
 shared store. This is the configuration the single-node test could not measure.
@@ -41,7 +41,7 @@ Reading it honestly:
   noise of each other, with zero errors on both. This is the strong signal: the
   16–29%-of-vanilla single-node gap (see below) **closes once Infinispan pays its
   clustering cost.**
-- At **40 users/sec both stacks are saturated on the single host** — A3 had 76% of
+- At **40 users/sec both stacks are saturated on the single host**: A3 had 76% of
   requests over 1.2s (slow but no failures); B3 had 85% over 1.2s plus 0.95%
   failures. This point is confounded by co-locating both clusters + Redis +
   Postgres + Gatling on one machine, so the 87% figure is not attributable to the

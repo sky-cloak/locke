@@ -1,4 +1,4 @@
-# Locke — scheduled benchmark + badge refresh.
+# Locke: scheduled benchmark + badge refresh.
 # Runs the clustered parity sweep weekly (and on demand), regenerates the README
 # parity badge + a historical data point, commits them, and opens an alert issue
 # if parity drops below 90% of vanilla.
@@ -6,11 +6,11 @@ name: locke-bench
 
 # NOTE: manual-only until the benchmark runs on isolated infra (EKS). A shared
 # GitHub-hosted runner co-locates the load generator with the pods, which
-# confounds the parity number — we hold the published figure until then
+# confounds the parity number, so we hold the published figure until then
 # (SKYCF-426 cloud / SKYCF-395). Re-enable the weekly schedule once that lands.
 on:
   # schedule:
-  #   - cron: '0 4 * * 1'   # Mondays 04:00 UTC — enable after EKS
+  #   - cron: '0 4 * * 1'   # Mondays 04:00 UTC, enable after EKS
   workflow_dispatch: {}
 
 permissions:

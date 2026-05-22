@@ -1,4 +1,4 @@
-# Locke — PR build, test, and benchmark.
+# Locke: PR build, test, and benchmark.
 # Builds the redis module + dist, runs its tests, then runs a short clustered
 # benchmark and comments the throughput parity vs vanilla on the PR.
 name: locke-pr
@@ -58,9 +58,9 @@ jobs:
               cat "$PARITY_FILE"
               echo '```'
               echo ""
-              echo "_Short single-host CI sweep — directional, not a release number._"
+              echo "_Short single-host CI sweep, directional, not a release number._"
             } > /tmp/pr-comment.md
             gh pr comment "${{ github.event.pull_request.number }}" --body-file /tmp/pr-comment.md
           else
-            gh pr comment "${{ github.event.pull_request.number }}" --body "Benchmark produced no parity file — check the workflow logs."
+            gh pr comment "${{ github.event.pull_request.number }}" --body "Benchmark produced no parity file. Check the workflow logs."
           fi

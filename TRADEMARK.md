@@ -2,7 +2,7 @@
 
 This document covers two marks: **Keycloak** (not ours) and **Locke** (ours).
 
-## "Keycloak" — Red Hat / CNCF
+## "Keycloak" (Red Hat / CNCF)
 
 "Keycloak" is a trademark of Red Hat, Inc., and is associated with the CNCF.
 
@@ -11,7 +11,7 @@ This document covers two marks: **Keycloak** (not ours) and **Locke** (ours).
   Keycloak project, Red Hat, or the CNCF.
 - We do not use the Keycloak name or logo as our own product identity, and we do
   not use it in our logo, domain names, or social handles.
-- Internally the software is Keycloak — it keeps the upstream `org.keycloak.*`
+- Internally the software is Keycloak: it keeps the upstream `org.keycloak.*`
   packages, `KC_*` configuration options, and the `kc.sh` entrypoint. Using those
   identifiers is required for compatibility and is nominative use, not a claim of
   ownership.
@@ -20,13 +20,13 @@ This mirrors how Adoptium Temurin refers to "Java/OpenJDK" and how Percona Serve
 refers to "MySQL": the upstream name is used factually, to state what the
 distribution is compatible with.
 
-## "Locke" — Skycloak
+## "Locke" (Skycloak)
 
 "Locke" and the Locke logo are marks of Skycloak (skycloak.io). Skycloak claims
 common-law rights in the "Locke" mark for identity and access management software
 and related services, and intends to pursue registration. *(Status: not yet
 registered. This document will be updated with registration numbers and classes
-once filings are made — we do not assert a registration that does not exist.)*
+once filings are made. We do not assert a registration that does not exist.)*
 
 You may:
 
@@ -43,7 +43,8 @@ Please do not:
 ### Logo note
 
 The Locke wordmark stands on its own. **Avoid any key-plus-lock combination
-logo** — it visually collides with the unrelated "Locke & Key" property and
+logo**, since it visually collides with the unrelated "Locke & Key" property and
 muddies the philosophical reference (John Locke, consent) we actually intend.
 
-Questions: brand@skycloak.io.
+Questions about the Locke mark: open an issue at
+https://github.com/sky-cloak/locke/issues.
