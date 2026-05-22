@@ -7,15 +7,15 @@ Amazon Corretto: the Locke version is the upstream Keycloak version it is built
 from, plus an independent build number.
 
 ```
-  26.3.5 - 1
+  26.6.1 - 1
   └──┬──┘   └┬┘
  Keycloak   Locke build number
  version    (resets per Keycloak version)
 ```
 
-`26.3.5-1` means "this is Keycloak 26.3.5, Locke build 1." A later Locke-only fix
-on the same Keycloak base would be `26.3.5-2`. When we rebase onto Keycloak
-26.4.0, the next release is `26.4.0-1`.
+`26.6.1-1` means "this is Keycloak 26.6.1, Locke build 1." A later Locke-only fix
+on the same Keycloak base would be `26.6.1-2`. When we rebase onto Keycloak
+26.7.0, the next release is `26.7.0-1`.
 
 This makes the upstream version unambiguous from the Locke version alone, which
 matters for matching CVE advisories and upstream release notes.
@@ -24,7 +24,8 @@ matters for matching CVE advisories and upstream release notes.
 
 | Locke | Keycloak base | Container image | Status |
 |---|---|---|---|
-| `26.3.5-1` | 26.3.5 | `ghcr.io/sky-cloak/locke:26.3.5-1` | current |
+| `26.6.1-1` | 26.6.1 | `ghcr.io/sky-cloak/locke:26.6.1-1` | current |
+| `26.3.5-1` | 26.3.5 | `ghcr.io/sky-cloak/locke:26.3.5-1` | previous |
 
 ## What "compatible" means
 
