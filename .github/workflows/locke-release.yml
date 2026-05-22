@@ -7,9 +7,10 @@ name: locke-release
 on:
   push:
     tags:
-      # GitHub filter patterns are globs, not regex (no '+' quantifier).
-      # Matches composite versions like 26.3.5-1.
-      - '[0-9]*.[0-9]*.[0-9]*-*'
+      # GitHub filter globs don't reliably support [0-9] character-class chains.
+      # '*.*.*-*' matches composite versions like 26.3.5-1 (three dotted parts +
+      # a build suffix) without matching bare tags. Verified empirically.
+      - '*.*.*-*'
 
 permissions:
   contents: write
