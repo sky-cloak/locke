@@ -14,7 +14,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1g
+          memory: 4g
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.3.5
@@ -30,7 +30,7 @@ services:
       KC_HTTP_ENABLED: "true"
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
-      JAVA_OPTS_APPEND: "-Xms512m -Xmx1500m"
+      JAVA_OPTS_APPEND: "-Xms1g -Xmx6g"
     ports:
       - "18080:8080"
     healthcheck:
@@ -45,5 +45,5 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2g
+          memory: 8g
           cpus: "2"
