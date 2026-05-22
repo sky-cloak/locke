@@ -2,8 +2,8 @@
   WHY.md: the receipts page. Tone rules (do not relax):
   - Respectful and factual. Quote and link; never editorialize the maintainers' decision.
   - The database-vs-cache table does the persuasion, not adjectives.
-  - Items marked <!-- TODO --> need a verbatim quote + permalink pasted in before launch.
-    Do not paraphrase a maintainer and present it as a quote.
+  - Keep all maintainer quotes verbatim with permalinks. Do not paraphrase a
+    maintainer and present it as a quote.
 -->
 
 > "The liberty of man, in society, is to be under no other legislative power
@@ -43,8 +43,15 @@ manages for them.
 This is not a need we invented.
 
 - **`keycloak/keycloak#24849`**: feature request for a Redis cache option.
-  36 👍 reactions. Closed 2026-04-29.
-  <!-- TODO: paste the closing comment verbatim + permalink. Do not paraphrase. -->
+  36 👍 reactions. Closed 2026-04-29 with this comment from the project lead:
+
+  > "We do not plan to add support for Redis to Keycloak. For a more detailed
+  > response, please see https://github.com/keycloak/keycloak/discussions/48577"
+  >
+  > [@stianst, 2026-04-29](https://github.com/keycloak/keycloak/issues/24849#issuecomment-4342536303)
+
+  ![keycloak/keycloak#24849 Redis cache support: 36 thumbs-up reactions and the closing comment](docs/assets/issue-24849-36-reactions.png)
+
 - **`keycloak/keycloak#13983`**: discussion open since 2022-08-25 asking for the
   same thing.
 - Operational pain running embedded/external Infinispan in Kubernetes:
