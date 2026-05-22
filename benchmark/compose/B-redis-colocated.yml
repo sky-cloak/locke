@@ -14,7 +14,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1g
+          memory: 4g
 
   redis:
     image: redis:7-alpine
@@ -30,7 +30,7 @@ services:
           memory: 512m
 
   keycloak:
-    image: localhost:5011/keycloak:999.0.0-redis-iter6
+    image: localhost:5011/keycloak:999.0.0-redis-iter7
     command: ["start-dev", "--hostname-strict=false", "--import-realm"]
     volumes:
       - ../realm-bench.json:/opt/keycloak/data/import/realm-bench.json:ro
@@ -47,8 +47,8 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
       KC_HEALTH_ENABLED: "true"
       KC_METRICS_ENABLED: "true"
-      KC_LOG_LEVEL: "INFO,org.keycloak.provider:DEBUG,org.keycloak.cache.redis:DEBUG,org.keycloak.connections.redis:DEBUG,org.keycloak.models.cache.redis:DEBUG,org.keycloak.services.DefaultKeycloakSession:DEBUG"
-      JAVA_OPTS_APPEND: "-Xms512m -Xmx1500m"
+      KC_LOG_LEVEL: "INFO"
+      JAVA_OPTS_APPEND: "-Xms1g -Xmx6g"
     ports:
       - "18081:8080"
       - "19081:9000"
@@ -66,5 +66,5 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2g
+          memory: 8g
           cpus: "2"

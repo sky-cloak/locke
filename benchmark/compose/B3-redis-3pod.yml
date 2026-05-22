@@ -33,7 +33,7 @@ services:
           memory: 512m
 
   keycloak1: &kc
-    image: localhost:5011/keycloak:999.0.0-redis-iter6
+    image: localhost:5011/keycloak:999.0.0-redis-iter7
     command: ["start-dev", "--hostname-strict=false", "--import-realm"]
     volumes:
       - ../realm-bench.json:/opt/keycloak/data/import/realm-bench.json:ro
