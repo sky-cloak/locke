@@ -117,6 +117,11 @@ public class InfinispanAuthenticationSessionProviderFactory implements Authentic
         KeycloakSessionFactory sessionFactory = session.getKeycloakSessionFactory();
         ClusterProvider cluster = session.getProvider(ClusterProvider.class);
 
+        if (cluster == null) {
+            log.debug("ClusterProvider not available, skipping cluster listener registration");
+            return;
+        }
+
         cluster.registerListener(REALM_REMOVED_AUTHSESSION_EVENT, new AbstractAuthSessionClusterListener<RealmRemovedSessionEvent>(sessionFactory) {
 
             @Override
@@ -198,7 +203,7 @@ public class InfinispanAuthenticationSessionProviderFactory implements Authentic
 
     @Override
     public boolean isSupported(Config.Scope config) {
-        return InfinispanUtils.isEmbeddedInfinispan();
+        return InfinispanUtils.isEmbeddedInfinispan() && !"redis".equals(config.root().get("cache"));
     }
 
     private InfinispanChangelogBasedTransaction<String, RootAuthenticationSessionEntity> createTransaction(KeycloakSession session) {

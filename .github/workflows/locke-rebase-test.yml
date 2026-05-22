@@ -1,0 +1,76 @@
+# Locke: daily rebase test against upstream Keycloak.
+# Tells us within hours whether Locke still rebases cleanly onto keycloak/keycloak
+# main, and whether it still builds after the rebase. Opens a tracking issue on
+# failure so a human can resolve the conflict before it compounds.
+name: locke-rebase-test
+
+on:
+  schedule:
+    - cron: '0 6 * * *'   # 06:00 UTC daily
+  workflow_dispatch: {}
+
+# Only meaningful on the canonical repo; skip on community forks.
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  rebase:
+    if: github.repository == 'sky-cloak/locke'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Locke main (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure identity
+        run: |
+          git config user.name  "locke-ci"
+          git config user.email "ci@skycloak.io"
+
+      - name: Add upstream and fetch
+        run: |
+          git remote add upstream https://github.com/keycloak/keycloak.git
+          git fetch upstream main --depth=200
+
+      - name: Attempt rebase onto upstream/main
+        id: rebase
+        run: |
+          if git rebase upstream/main; then
+            echo "result=clean" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=conflict" >> "$GITHUB_OUTPUT"
+            echo "Conflicting files:" > /tmp/conflict.txt
+            git diff --name-only --diff-filter=U >> /tmp/conflict.txt
+            git rebase --abort || true
+          fi
+
+      - name: Set up JDK 21
+        if: steps.rebase.outputs.result == 'clean'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build after rebase (dist + redis module)
+        if: steps.rebase.outputs.result == 'clean'
+        run: ./mvnw -pl model/redis,quarkus/dist -am -B -DskipTests install
+
+      - name: Open issue on rebase conflict
+        if: steps.rebase.outputs.result == 'conflict'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BODY=$(cat /tmp/conflict.txt)
+          gh issue create \
+            --title "Rebase conflict against upstream Keycloak ($(date -u +%Y-%m-%d))" \
+            --label "rebase-conflict" \
+            --body "Automated daily rebase onto \`upstream/main\` failed.
+
+          \`\`\`
+          ${BODY}
+          \`\`\`
+
+          Resolve locally: \`git fetch upstream && git rebase upstream/main\`."

@@ -1,0 +1,72 @@
+# Locke: scheduled benchmark + badge refresh.
+# Runs the clustered parity sweep weekly (and on demand), regenerates the README
+# parity badge + a historical data point, commits them, and opens an alert issue
+# if parity drops below 90% of vanilla.
+name: locke-bench
+
+# NOTE: manual-only until the benchmark runs on isolated infra (EKS). A shared
+# GitHub-hosted runner co-locates the load generator with the pods, which
+# confounds the parity number, so we hold the published figure until then
+# (SKYCF-426 cloud / SKYCF-395). Re-enable the weekly schedule once that lands.
+on:
+  # schedule:
+  #   - cron: '0 4 * * 1'   # Mondays 04:00 UTC, enable after EKS
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  bench:
+    if: github.repository == 'sky-cloak/locke'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build dist + bench image
+        run: |
+          ./mvnw -pl quarkus/dist -am -B -DskipTests install
+          cp quarkus/dist/target/keycloak-*.tar.gz benchmark/
+          docker build -f quarkus/container/Dockerfile \
+            --build-arg KEYCLOAK_DIST="$(ls quarkus/dist/target/keycloak-*.tar.gz)" \
+            -t localhost:5011/keycloak:999.0.0-redis-iter7 .
+
+      - name: Run clustered parity sweep
+        run: |
+          cd benchmark/load-test/scripts
+          ./clustered-throughput-sweep.sh "5 20 40" 60
+
+      - name: Regenerate badge + history point
+        id: badge
+        run: |
+          if ./benchmark/gen-bench-badge.sh 90; then
+            echo "below_threshold=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "below_threshold=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit badge + history
+        run: |
+          git config user.name  "locke-ci"
+          git config user.email "ci@skycloak.io"
+          git add benchmark/history/
+          git commit -m "ci: refresh benchmark badge + history point" || echo "no changes"
+          git push || echo "nothing to push"
+
+      - name: Alert on parity regression
+        if: steps.badge.outputs.below_threshold == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "Throughput parity below 90% ($(date -u +%Y-%m-%d))" \
+            --label "bench-regression" \
+            --body "The weekly clustered benchmark reported parity below the 90% threshold. See benchmark/history/badge.json and the latest parity.txt artifact."

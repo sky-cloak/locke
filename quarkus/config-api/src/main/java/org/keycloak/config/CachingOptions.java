@@ -40,14 +40,17 @@ public class CachingOptions {
 
     public enum Mechanism {
         ispn,
-        local
+        local,
+        redis
     }
 
     public static final Option<Mechanism> CACHE = new OptionBuilder<>("cache", Mechanism.class)
             .category(OptionCategory.CACHE)
+            .buildTime(true)
             .description("Defines the cache mechanism for high-availability. "
                     + "By default in production mode, a 'ispn' cache is used to create a cluster between multiple server nodes. "
-                    + "By default in development mode, a 'local' cache disables clustering and is intended for development and testing purposes.")
+                    + "By default in development mode, a 'local' cache disables clustering and is intended for development and testing purposes. "
+                    + "Use 'redis' for Redis-based distributed caching.")
             .build();
 
     public enum Stack {
@@ -184,6 +187,55 @@ public class CachingOptions {
     public static final Option<List<String>> CACHE_REMOTE_BACKUP_SITES = OptionBuilder.listOptionBuilder(CACHE_REMOTE_BACKUP_SITES_PROPERTY, String.class)
             .category(OptionCategory.CACHE)
             .description("Configures a list of backup sites names to where the external Infinispan cluster backups the Keycloak data.")
+            .build();
+
+    // Redis cache configuration options
+    private static final String CACHE_REDIS_PREFIX = "cache-redis";
+    public static final String CACHE_REDIS_URL_PROPERTY = CACHE_REDIS_PREFIX + "-url";
+    public static final String CACHE_REDIS_USERNAME_PROPERTY = CACHE_REDIS_PREFIX + "-username";
+    public static final String CACHE_REDIS_PASSWORD_PROPERTY = CACHE_REDIS_PREFIX + "-password";
+    public static final String CACHE_REDIS_DATABASE_PROPERTY = CACHE_REDIS_PREFIX + "-database";
+    public static final String CACHE_REDIS_TIMEOUT_PROPERTY = CACHE_REDIS_PREFIX + "-timeout";
+    public static final String CACHE_REDIS_MAX_POOL_SIZE_PROPERTY = CACHE_REDIS_PREFIX + "-max-pool-size";
+    public static final String CACHE_REDIS_MIN_IDLE_PROPERTY = CACHE_REDIS_PREFIX + "-min-idle";
+
+    public static final Option<String> CACHE_REDIS_URL = new OptionBuilder<>(CACHE_REDIS_URL_PROPERTY, String.class)
+            .category(OptionCategory.CACHE)
+            .description("The Redis connection URL. Format: redis://[username:password@]host:port[/database] or redis-sentinel://[username:password@]host1:port1,host2:port2[/database]?sentinelMasterId=masterId")
+            .build();
+
+    public static final Option<String> CACHE_REDIS_USERNAME = new OptionBuilder<>(CACHE_REDIS_USERNAME_PROPERTY, String.class)
+            .category(OptionCategory.CACHE)
+            .description("The username for Redis authentication. Required if the Redis server requires authentication.")
+            .build();
+
+    public static final Option<String> CACHE_REDIS_PASSWORD = new OptionBuilder<>(CACHE_REDIS_PASSWORD_PROPERTY, String.class)
+            .category(OptionCategory.CACHE)
+            .description("The password for Redis authentication. Required if the Redis server requires authentication.")
+            .build();
+
+    public static final Option<Integer> CACHE_REDIS_DATABASE = new OptionBuilder<>(CACHE_REDIS_DATABASE_PROPERTY, Integer.class)
+            .category(OptionCategory.CACHE)
+            .description("The Redis database number to use (0-15).")
+            .defaultValue(0)
+            .build();
+
+    public static final Option<Integer> CACHE_REDIS_TIMEOUT = new OptionBuilder<>(CACHE_REDIS_TIMEOUT_PROPERTY, Integer.class)
+            .category(OptionCategory.CACHE)
+            .description("The Redis connection timeout in milliseconds.")
+            .defaultValue(10000)
+            .build();
+
+    public static final Option<Integer> CACHE_REDIS_MAX_POOL_SIZE = new OptionBuilder<>(CACHE_REDIS_MAX_POOL_SIZE_PROPERTY, Integer.class)
+            .category(OptionCategory.CACHE)
+            .description("The maximum number of connections in the Redis connection pool.")
+            .defaultValue(64)
+            .build();
+
+    public static final Option<Integer> CACHE_REDIS_MIN_IDLE = new OptionBuilder<>(CACHE_REDIS_MIN_IDLE_PROPERTY, Integer.class)
+            .category(OptionCategory.CACHE)
+            .description("The minimum number of idle connections maintained in the Redis connection pool.")
+            .defaultValue(8)
             .build();
 
     public static Option<Integer> maxCountOption(String cache) {
