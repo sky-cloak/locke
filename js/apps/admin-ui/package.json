@@ -125,7 +125,7 @@
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react-swc": "^4.2.2",
     "cross-env": "^10.1.0",
-    "jsdom": "^27.4.0",
+    "jsdom": "^29.1.1",
     "lightningcss": "^1.30.2",
     "properties-file": "^3.6.3",
     "ts-node": "^10.9.2",
