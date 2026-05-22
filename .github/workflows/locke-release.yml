@@ -1,0 +1,73 @@
+# Locke — release pipeline.
+# Triggered by a composite-version tag (e.g. 26.3.5-1 = Keycloak 26.3.5, Locke
+# build 1). Builds the distribution, builds and pushes the container image to
+# GHCR, and cuts a GitHub release.
+name: locke-release
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+-*'   # composite versioning: <kc-version>-<build>
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    if: github.repository == 'sky-cloak/locke'
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ghcr.io/sky-cloak/locke
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build distribution
+        run: ./mvnw -pl quarkus/dist -am -B -DskipTests install
+
+      - name: Stage dist tarball
+        run: |
+          mkdir -p build
+          cp quarkus/dist/target/keycloak-*.tar.gz build/
+
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build and push image
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          docker build -f quarkus/container/Dockerfile \
+            --build-arg KEYCLOAK_DIST="$(ls build/keycloak-*.tar.gz)" \
+            -t "$IMAGE:$TAG" -t "$IMAGE:latest" .
+          docker push "$IMAGE:$TAG"
+          docker push "$IMAGE:latest"
+
+      - name: Generate release notes
+        run: |
+          {
+            echo "## Locke ${GITHUB_REF_NAME}"
+            echo ""
+            echo "Keycloak base: \`${GITHUB_REF_NAME%-*}\` · Locke build: \`${GITHUB_REF_NAME##*-}\`"
+            echo ""
+            echo "Image: \`${IMAGE}:${GITHUB_REF_NAME}\`"
+            echo ""
+            echo "See [COMPATIBILITY.md](./COMPATIBILITY.md) and [benchmark/RESULTS.md](./benchmark/RESULTS.md)."
+          } > RELEASE_NOTES.md
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "Locke ${GITHUB_REF_NAME}" \
+            --notes-file RELEASE_NOTES.md \
+            build/keycloak-*.tar.gz
