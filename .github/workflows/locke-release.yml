@@ -7,7 +7,9 @@ name: locke-release
 on:
   push:
     tags:
-      - '[0-9]+.[0-9]+.[0-9]+-*'   # composite versioning: <kc-version>-<build>
+      # GitHub filter patterns are globs, not regex (no '+' quantifier).
+      # Matches composite versions like 26.3.5-1.
+      - '[0-9]*.[0-9]*.[0-9]*-*'
 
 permissions:
   contents: write
