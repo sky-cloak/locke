@@ -85,6 +85,11 @@ public class InfinispanUserLoginFailureProviderFactory implements UserLoginFailu
         KeycloakSessionFactory sessionFactory = session.getKeycloakSessionFactory();
         ClusterProvider cluster = session.getProvider(ClusterProvider.class);
 
+        if (cluster == null) {
+            log.debug("ClusterProvider not available, skipping cluster listener registration");
+            return;
+        }
+
         cluster.registerListener(REALM_REMOVED_SESSION_EVENT,
                 new AbstractUserSessionClusterListener<RealmRemovedSessionEvent, UserLoginFailureProvider>(sessionFactory, UserLoginFailureProvider.class) {
 
@@ -128,7 +133,7 @@ public class InfinispanUserLoginFailureProviderFactory implements UserLoginFailu
 
     @Override
     public boolean isSupported(Config.Scope config) {
-        return InfinispanUtils.isEmbeddedInfinispan();
+        return InfinispanUtils.isEmbeddedInfinispan() && !"redis".equals(config.root().get("cache"));
     }
 
     @Override

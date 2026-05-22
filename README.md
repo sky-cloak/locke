@@ -1,80 +1,105 @@
-![Keycloak](https://github.com/keycloak/keycloak-misc/blob/main/logo/logo.svg)
+# Locke
 
-![GitHub Release](https://img.shields.io/github/v/release/keycloak/keycloak?label=latest%20release)
-[![OpenSSF Best Practices](https://bestpractices.coreinfrastructure.org/projects/6818/badge)](https://bestpractices.coreinfrastructure.org/projects/6818)
-[![CLOMonitor](https://img.shields.io/endpoint?url=https://clomonitor.io/api/projects/cncf/keycloak/badge)](https://clomonitor.io/projects/cncf/keycloak)
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/keycloak/keycloak/badge)](https://securityscorecards.dev/viewer/?uri=github.com/keycloak/keycloak)
-[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/keycloak-operator)](https://artifacthub.io/packages/olm/community-operators/keycloak-operator)
-![GitHub Repo stars](https://img.shields.io/github/stars/keycloak/keycloak?style=flat)
-![GitHub commit activity](https://img.shields.io/github/commit-activity/m/keycloak/keycloak)
-[![Translation status](https://hosted.weblate.org/widget/keycloak/svg-badge.svg)](docs/translation.md)
+**A drop-in Keycloak distribution that runs on Redis instead of Infinispan, so you can operate it with a managed cache your cloud already provides.**
 
-# Open Source Identity and Access Management
+[![Build](https://github.com/sky-cloak/locke/actions/workflows/pr.yml/badge.svg)](https://github.com/sky-cloak/locke/actions/workflows/pr.yml)
+[![Benchmarks](https://img.shields.io/badge/benchmarks-methodology%20%26%20results-blue)](./benchmark/RESULTS.md)
+[![Keycloak compatibility](https://img.shields.io/badge/Keycloak-26.3.5-blue)](./COMPATIBILITY.md)
+[![License](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE.txt)
 
-Add authentication to applications and secure services with minimum effort. No need to deal with storing users or authenticating users.
+Locke is a distribution of [Keycloak](https://www.keycloak.org) that ships with
+**both** cache backends (the upstream embedded Infinispan and a Redis backend)
+and lets the operator pick one at boot. When you don't pick Redis, Locke is the
+Keycloak it was built from, unchanged.
 
-Keycloak provides user federation, strong authentication, user management, fine-grained authorization, and more.
+> Keycloak gives you the key. Locke gives you the choice.
 
+Why does this exist? See **[WHY.md](./WHY.md)**.
 
-## Help and Documentation
+## Quickstart (5 minutes)
 
-* [Documentation](https://www.keycloak.org/documentation.html)
-* [User Mailing List](https://groups.google.com/d/forum/keycloak-user) - Mailing list for help and general questions about Keycloak
-* Join [#keycloak](https://cloud-native.slack.com/archives/C056HC17KK9) for general questions, or [#keycloak-dev](https://cloud-native.slack.com/archives/C056XU905S6) on Slack for design and development discussions, by creating an account at [https://slack.cncf.io/](https://slack.cncf.io/).
+Both backends ship in the same binary. Choose with one environment variable.
 
+```bash
+# Default: embedded Infinispan, identical to upstream Keycloak
+docker run --rm -p 8080:8080 \
+  -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
+  ghcr.io/sky-cloak/locke:26.3.5-1 start-dev
 
-## Reporting Security Vulnerabilities
+# Redis backend: point it at any Redis / Valkey / wire-compatible store
+docker run --rm -p 8080:8080 \
+  -e KC_CACHE=redis -e KC_CACHE_REDIS_URL=redis://my-redis:6379 \
+  -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
+  ghcr.io/sky-cloak/locke:26.3.5-1 start-dev
+```
 
-If you have found a security vulnerability, please look at the [instructions on how to properly report it](https://github.com/keycloak/keycloak/security/policy).
+Or with compose (Postgres + Redis + Locke):
 
+```bash
+docker compose -f docker-compose-redis.yml up
+```
 
-## Reporting an issue
+## Architecture
 
-If you believe you have discovered a defect in Keycloak, please open [an issue](https://github.com/keycloak/keycloak/issues).
-Please remember to provide a good summary, description as well as steps to reproduce the issue.
+```
+        HTTP request (login / refresh / token)
+                     │
+                     ▼
+        Keycloak SPI dispatch  (Realm / User / Client / AuthSession / …)
+                     │
+                     ▼
+        Cache adapter layer  (model/redis)
+          ├─ L1: Caffeine, in-JVM (~100 ns), bounded 10k + 60s TTL
+          └─ L2: Redis / Valkey   (shared, cross-pod)
+                     │                     cross-pod invalidation
+                     ▼                     via Redis pub/sub (no JGroups)
+        PostgreSQL (source of truth)
+```
 
+`KC_CACHE=infinispan` swaps the adapter layer back to the upstream embedded
+Infinispan stack with no other change. Full design notes:
+[docs/redis-cache-architecture.md](./docs/redis-cache-architecture.md).
 
-## Getting started
+## Compatibility
 
-To run Keycloak, download the distribution from our [website](https://www.keycloak.org/downloads.html). Unzip and run:
+Locke uses **composite versioning**: the Locke version is the upstream Keycloak
+version it was built from, plus a build number. `26.3.5-1` means "Keycloak 26.3.5,
+Locke build 1." This is the Percona Server / Amazon Corretto convention.
 
-    bin/kc.[sh|bat] start-dev
+| Locke | Built from Keycloak | Status |
+|---|---|---|
+| `26.3.5-1` | 26.3.5 | current |
 
-Alternatively, you can use the Docker image by running:
+See [COMPATIBILITY.md](./COMPATIBILITY.md) for the full matrix and support window.
 
-    docker run quay.io/keycloak/keycloak start-dev
-    
-For more details refer to the [Keycloak Documentation](https://www.keycloak.org/documentation.html).
+## Configuration
 
+| Option | Default | Purpose |
+|---|---|---|
+| `KC_CACHE` | `infinispan` | Cache backend: `infinispan` or `redis` |
+| `KC_CACHE_REDIS_URL` | (none) | Redis connection URL (required when `KC_CACHE=redis`) |
 
-## Building from Source
+Every other Keycloak option works exactly as upstream. Locke adds no new database,
+no new admin API, and no new operational concept beyond "you may point the cache at
+Redis."
 
-To build from source, refer to the [building and working with the code base](docs/building.md) guide.
+## Performance
 
+In 3-pod cluster tests behind a load balancer, the Redis backend keeps pace with
+embedded Infinispan at sustained load. We are validating the exact parity figure
+on isolated cloud infrastructure before publishing a number. Methodology,
+preliminary numbers, and caveats are in
+[benchmark/RESULTS.md](./benchmark/RESULTS.md), and CI refreshes them on each
+release.
 
-### Testing
+## Don't want to operate this yourself?
 
-To run tests, refer to the [running tests](docs/tests.md) guide.
-
-
-### Writing Tests
-
-To write tests, refer to the [writing tests](docs/tests-development.md) guide.
-
-
-## Contributing
-
-Before contributing to Keycloak, please read our [contributing guidelines](CONTRIBUTING.md). Participation in the Keycloak project is governed by the [CNCF Code of Conduct](https://github.com/cncf/foundation/blob/main/code-of-conduct.md).
-
-Joining a [community meeting](https://www.keycloak.org/community) is a great way to get involved and help shape the future of Keycloak.
-
-## Other Keycloak Projects
-
-* [Keycloak](https://github.com/keycloak/keycloak) - Keycloak Server and Java adapters
-* [Keycloak QuickStarts](https://github.com/keycloak/keycloak-quickstarts) - QuickStarts for getting started with Keycloak
-* [Keycloak Node.js Connect](https://github.com/keycloak/keycloak-nodejs-connect) - Node.js adapter for Keycloak
-
+[Skycloak](https://skycloak.io) runs managed Keycloak (and Locke) for you: the
+"I want the choice without the on-call" option.
 
 ## License
 
-* [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0)
+Apache License 2.0, inherited from upstream Keycloak. See [LICENSE.txt](./LICENSE.txt)
+and [NOTICE](./NOTICE). "Keycloak" is a trademark of Red Hat / CNCF; see
+[TRADEMARK.md](./TRADEMARK.md). Contributions: [CONTRIBUTING.md](./CONTRIBUTING.md).
+Security: [SECURITY.md](./SECURITY.md).
