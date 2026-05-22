@@ -48,9 +48,14 @@ jobs:
       - name: Build and push image
         run: |
           TAG="${GITHUB_REF_NAME}"
-          docker build -f quarkus/container/Dockerfile \
-            --build-arg KEYCLOAK_DIST="$(ls build/keycloak-*.tar.gz)" \
-            -t "$IMAGE:$TAG" -t "$IMAGE:latest" .
+          # The upstream container Dockerfile must build with context =
+          # quarkus/container (ADD ubi-null.sh + local KEYCLOAK_DIST need the
+          # tarball and script inside the context). See quarkus/container/README.md.
+          cp build/keycloak-*.tar.gz quarkus/container/
+          DIST_FILE="$(basename "$(ls build/keycloak-*.tar.gz)")"
+          docker build quarkus/container \
+            --build-arg KEYCLOAK_DIST="$DIST_FILE" \
+            -t "$IMAGE:$TAG" -t "$IMAGE:latest"
           docker push "$IMAGE:$TAG"
           docker push "$IMAGE:latest"
 
