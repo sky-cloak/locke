@@ -25,6 +25,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up QEMU (cross-arch emulation for arm64 build)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -45,19 +51,22 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-      - name: Build and push image
+      - name: Build and push image (multi-arch)
         run: |
           TAG="${GITHUB_REF_NAME}"
           # The upstream container Dockerfile must build with context =
           # quarkus/container (ADD ubi-null.sh + local KEYCLOAK_DIST need the
           # tarball and script inside the context). See quarkus/container/README.md.
+          # The dist tarball is pure Java (arch-agnostic) and the base is multi-arch
+          # ubi9, so one tarball feeds both arches; arm64 builds under QEMU emulation.
           cp build/keycloak-*.tar.gz quarkus/container/
           DIST_FILE="$(basename "$(ls build/keycloak-*.tar.gz)")"
-          docker build quarkus/container \
+          docker buildx build quarkus/container \
+            --platform linux/amd64,linux/arm64 \
             --build-arg KEYCLOAK_DIST="$DIST_FILE" \
-            -t "$IMAGE:$TAG" -t "$IMAGE:latest"
-          docker push "$IMAGE:$TAG"
-          docker push "$IMAGE:latest"
+            -t "$IMAGE:$TAG" -t "$IMAGE:latest" \
+            --provenance=false \
+            --push
 
       - name: Mirror image to Quay and Docker Hub
         # Each registry is independent and skipped when its credentials are absent.
@@ -71,19 +80,22 @@ jobs:
           DOCKERHUB_IMAGE: docker.io/skycloak/locke
         run: |
           TAG="${GITHUB_REF_NAME}"
+          # skopeo copy --all preserves the full multi-arch manifest list, so the
+          # mirrors stay multi-arch too (docker tag/push would flatten to one arch).
+          sudo apt-get update && sudo apt-get install -y skopeo
           if [ -n "$QUAY_TOKEN" ]; then
             echo "Mirroring to $QUAY_IMAGE"
-            echo "$QUAY_TOKEN" | docker login quay.io -u "$QUAY_USER" --password-stdin
-            docker tag "$IMAGE:$TAG" "$QUAY_IMAGE:$TAG";   docker push "$QUAY_IMAGE:$TAG"
-            docker tag "$IMAGE:$TAG" "$QUAY_IMAGE:latest"; docker push "$QUAY_IMAGE:latest"
+            skopeo login quay.io -u "$QUAY_USER" --password "$QUAY_TOKEN"
+            skopeo copy --all "docker://$IMAGE:$TAG"   "docker://$QUAY_IMAGE:$TAG"
+            skopeo copy --all "docker://$IMAGE:latest" "docker://$QUAY_IMAGE:latest"
           else
             echo "Quay credentials not set; skipping Quay."
           fi
           if [ -n "$DOCKERHUB_TOKEN" ]; then
             echo "Mirroring to $DOCKERHUB_IMAGE"
-            echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USER" --password-stdin
-            docker tag "$IMAGE:$TAG" "$DOCKERHUB_IMAGE:$TAG";   docker push "$DOCKERHUB_IMAGE:$TAG"
-            docker tag "$IMAGE:$TAG" "$DOCKERHUB_IMAGE:latest"; docker push "$DOCKERHUB_IMAGE:latest"
+            skopeo login docker.io -u "$DOCKERHUB_USER" --password "$DOCKERHUB_TOKEN"
+            skopeo copy --all "docker://$IMAGE:$TAG"   "docker://$DOCKERHUB_IMAGE:$TAG"
+            skopeo copy --all "docker://$IMAGE:latest" "docker://$DOCKERHUB_IMAGE:latest"
           else
             echo "Docker Hub credentials not set; skipping Docker Hub."
           fi
