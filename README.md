@@ -1,15 +1,13 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/locke-mark-paper.svg">
-    <img src="docs/brand/locke-mark.svg" alt="Locke" width="92">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/locke-lockup-inline-paper.svg">
+    <img src="docs/brand/locke-lockup-inline.svg" alt="Locke" width="260">
   </picture>
 </p>
 
-<h1 align="center">Locke</h1>
-
 <p align="center"><strong>A drop-in Keycloak distribution that runs on Redis instead of Infinispan, so you can operate it with a managed cache your cloud already provides.</strong></p>
 
-[![Build](https://github.com/sky-cloak/locke/actions/workflows/pr.yml/badge.svg)](https://github.com/sky-cloak/locke/actions/workflows/pr.yml)
+[![Build](https://github.com/sky-cloak/locke/actions/workflows/locke-pr.yml/badge.svg)](https://github.com/sky-cloak/locke/actions/workflows/locke-pr.yml)
 [![Benchmarks](https://img.shields.io/badge/benchmarks-methodology%20%26%20results-blue)](./benchmark/RESULTS.md)
 [![Keycloak compatibility](https://img.shields.io/badge/Keycloak-26.6.2-blue)](./COMPATIBILITY.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE.txt)
