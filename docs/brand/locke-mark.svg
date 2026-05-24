@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Locke">
+  <rect width="256" height="256" rx="56" fill="#3B3B98"/>
+  <!-- "L" monogram split by a threshold gap: an open doorway, access by consent. No lock, no key. -->
+  <g fill="none" stroke="#FFFFFF" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M96 60 V112"/>
+    <path d="M96 138 V196 H188"/>
+  </g>
+</svg>

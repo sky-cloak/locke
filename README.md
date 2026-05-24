@@ -86,12 +86,16 @@ Redis."
 
 ## Performance
 
-In 3-pod cluster tests behind a load balancer, the Redis backend keeps pace with
-embedded Infinispan at sustained load. We are validating the exact parity figure
-on isolated cloud infrastructure before publishing a number. Methodology,
-preliminary numbers, and caveats are in
-[benchmark/RESULTS.md](./benchmark/RESULTS.md), and CI refreshes them on each
-release.
+In a 3-pod production cluster (`start --optimized`) on isolated nodes, the Redis
+backend delivers **~100% throughput parity** with embedded Infinispan (within ~0.1%
+to 250 logins/sec, zero errors on both). The trade is a little read latency for a
+large resilience gain: when a node is lost, Infinispan stalls ~31–40s rebalancing
+(JGroups state transfer) while Locke keeps serving from Redis at sub-second p99.
+Cross-version upgrades roll under load too (no JGroups version barrier), whereas an
+Infinispan rolling upgrade across an incompatible version is an outage. Full
+methodology, per-operation latency, resilience, upgrade, and memory numbers are in
+[benchmark/k8s-ovh/REPORT.md](./benchmark/k8s-ovh/REPORT.md) (and
+[benchmark/RESULTS.md](./benchmark/RESULTS.md) for the local runs).
 
 ## Don't want to operate this yourself?
 

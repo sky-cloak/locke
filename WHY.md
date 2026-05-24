@@ -76,10 +76,14 @@ ElastiCache/MemoryDB, Azure Cache for Redis, GCP Memorystore.
 
 - When `KC_CACHE=infinispan` (the default), Locke behaves exactly like the
   Keycloak it was built from. The Redis path is opt-in.
-- In 3-pod cluster tests, the Redis backend **keeps pace with embedded
-  Infinispan at sustained load**. We are validating the exact parity figure on
-  isolated cloud infrastructure before publishing a number. We would rather ship
-  a number we can stand behind than a marketing one.
+- In a 3-pod production cluster (`start --optimized`) on isolated nodes, the Redis
+  backend delivers **~100% throughput parity** with embedded Infinispan (within
+  ~0.1% to 250 logins/sec, zero errors on both). It trades a little read latency
+  (in-process Infinispan reads beat a Redis round trip) for a large resilience
+  gain: when a node is lost, Infinispan stalls ~31–40s rebalancing while Locke
+  keeps serving from Redis with sub-second p99. Cross-version upgrades also roll
+  under load (no JGroups version barrier). Full methodology and numbers in
+  [benchmark/k8s-ovh/REPORT.md](./benchmark/k8s-ovh/REPORT.md).
 
 ## What Locke is not
 
