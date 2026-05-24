@@ -1,0 +1,80 @@
+# Locke: one-off backfill to republish already-released tags as multi-arch.
+# The early releases were pushed amd64-only; this rebuilds each tag for both
+# linux/amd64 + linux/arm64 (from the dist tarball attached to its GitHub release)
+# and pushes a manifest list to GHCR + Quay + Docker Hub in a single buildx run.
+# Future releases are multi-arch by default via locke-release.yml; this is for the
+# back catalogue. Manually dispatched.
+name: locke-backfill-arch
+
+on:
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: "Tags to rebuild as multi-arch and republish"
+        required: true
+        default: "26.3.5-2 26.3.5-3 26.6.1-1 26.6.1-2 26.6.2-1 26.6.2-2"
+      latest_tag:
+        description: "Tag that 'latest' should point at (multi-arch)"
+        required: true
+        default: "26.6.2-2"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  backfill:
+    if: github.repository == 'sky-cloak/locke'
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ghcr.io/sky-cloak/locke
+      QUAY_IMAGE: quay.io/skycloak/locke
+      DOCKERHUB_IMAGE: docker.io/skycloak/locke
+      QUAY_USER: ${{ secrets.QUAY_USERNAME }}
+      QUAY_TOKEN: ${{ secrets.QUAY_TOKEN }}
+      DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAGS: ${{ inputs.tags }}
+      LATEST_TAG: ${{ inputs.latest_tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU (cross-arch emulation for arm64 build)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Registry logins
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          if [ -n "$QUAY_TOKEN" ]; then echo "$QUAY_TOKEN" | docker login quay.io -u "$QUAY_USER" --password-stdin; else echo "no quay creds"; fi
+          if [ -n "$DOCKERHUB_TOKEN" ]; then echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USER" --password-stdin; else echo "no dockerhub creds"; fi
+
+      - name: Rebuild each tag multi-arch and push
+        run: |
+          set -euo pipefail
+          for TAG in $TAGS; do
+            echo "::group::$TAG"
+            rm -f quarkus/container/keycloak-*.tar.gz
+            gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p 'keycloak-*.tar.gz' -D quarkus/container --clobber
+            DIST_FILE="$(basename "$(ls quarkus/container/keycloak-*.tar.gz)")"
+            TAG_ARGS="-t $IMAGE:$TAG"
+            [ -n "$QUAY_TOKEN" ]      && TAG_ARGS="$TAG_ARGS -t $QUAY_IMAGE:$TAG"
+            [ -n "$DOCKERHUB_TOKEN" ] && TAG_ARGS="$TAG_ARGS -t $DOCKERHUB_IMAGE:$TAG"
+            docker buildx build quarkus/container \
+              --platform linux/amd64,linux/arm64 \
+              --build-arg KEYCLOAK_DIST="$DIST_FILE" \
+              $TAG_ARGS \
+              --provenance=false \
+              --push
+            echo "::endgroup::"
+          done
+
+      - name: Point latest at the multi-arch manifest list
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create -t "$IMAGE:latest" "$IMAGE:$LATEST_TAG"
+          if [ -n "$QUAY_TOKEN" ];      then docker buildx imagetools create -t "$QUAY_IMAGE:latest"      "$QUAY_IMAGE:$LATEST_TAG"; fi
+          if [ -n "$DOCKERHUB_TOKEN" ]; then docker buildx imagetools create -t "$DOCKERHUB_IMAGE:latest" "$DOCKERHUB_IMAGE:$LATEST_TAG"; fi
