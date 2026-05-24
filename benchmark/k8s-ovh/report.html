@@ -80,10 +80,19 @@
 <table>
 <tr><th>Phase</th><th class="n">Result</th></tr>
 <tr><td>Baseline (Redis up)</td><td class="n good">201 rps · p99 115ms · 0 failures</td></tr>
-<tr><td>Redis killed mid-load</td><td class="n warn">in-flight requests hang (no client read-timeout) until Redis returns</td></tr>
-<tr><td>After Redis returns</td><td class="n good">128 rps · p99 70ms · 0 failures — full recovery (Lettuce auto-reconnect)</td></tr>
+<tr><td>Redis killed — 26.6.1</td><td class="n warn">in-flight requests <b>hang</b> (no client timeout) until Redis returns</td></tr>
+<tr><td>Redis killed — 26.6.2-2 (fixed)</td><td class="n good"><b>fail fast</b>: RedisCommandTimeoutException after 2s (no thread hang)</td></tr>
+<tr><td>After Redis returns</td><td class="n good">full recovery — 127 rps · p99 74ms · 0 failures · 0 timeouts</td></tr>
 </table>
-<p class="note"><b>Caveat + fix:</b> a Redis outage currently <i>hangs</i> in-flight requests rather than failing them fast, because the Lettuce/Redisson calls are not bounded by a timeout. The service recovers completely once Redis is back. Recommended fix: bound the Redis client read/connect timeout.</p>
+<p class="note"><b>Fixed in <code>locke:26.6.2-2</code>:</b> Lettuce <code>ClientOptions</code> with <code>TimeoutOptions.enabled(2s)</code> + <code>disconnectedBehavior=REJECT_COMMANDS</code> — an outage now degrades fast and recovers instead of hanging. The same image also honors <code>KC_CACHE_REDIS_URL</code> under <code>--optimized</code> (no SPI workaround). For zero-downtime through a Redis failure, run Redis HA (Sentinel/Cluster).</p>
+
+<h2>7. Redis placement: embedded (colocated) vs external (cross-node)</h2>
+<table>
+<tr><th>Load</th><th class="n">External (separate node)</th><th class="n">Colocated (KC node)</th></tr>
+<tr><td>80 ups</td><td class="n">270 rps · p99 81ms</td><td class="n">270 rps · p99 75ms</td></tr>
+<tr><td>160 ups</td><td class="n">541 rps · p99 93ms</td><td class="n">540 rps · p99 112ms</td></tr>
+</table>
+<p class="note"><b>Placement is negligible</b> below saturation (throughput identical, p99 within ~6–20ms). Locke's in-JVM L1 (Caffeine) absorbs most reads, so a <b>managed/external Redis on the same network performs the same</b> as colocated — no need to co-locate Redis with Keycloak.</p>
 
 <h2>5. Rolling version upgrade 26.3.5 → 26.6.1 under load</h2>
 <div class="card">

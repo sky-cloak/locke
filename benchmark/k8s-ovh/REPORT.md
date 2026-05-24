@@ -91,10 +91,21 @@ Same-version pod cycling and scaling are clean on both backends.
 | **Redis killed mid-load** | in-flight requests **hang** — the Redis client path has no read/connect timeout, so request threads block until Redis returns (no result produced; load gen had to be force-stopped) |
 | After Redis returns | 128 rps, p99 70ms, **0 failures** — **full recovery**; KC pods auto-reconnect (Lettuce "Reconnected to redis") |
 
-**Honest caveat + fix:** a Redis outage hangs in-flight requests rather than failing them fast,
-because the Lettuce/Redisson calls aren't bounded by a timeout. The service recovers completely
-once Redis is back. **Recommended fix: bound the Redis client read/connect timeout** so an outage
-degrades fast instead of hanging.
+**Honest caveat (26.6.1) → FIXED in 26.6.2-2:** on 26.6.1 a Redis outage *hung* in-flight requests
+because the Lettuce calls weren't bounded by a timeout. This is **fixed** in `locke:26.6.2-2`
+(Lettuce `ClientOptions` with `TimeoutOptions.enabled(timeout)` + `disconnectedBehavior=REJECT_COMMANDS`).
+
+**Re-validated on 26.6.2-2 (fixed image):**
+
+| Phase | 26.6.1 (before) | 26.6.2-2 (fixed) |
+|---|---|---|
+| Redis killed mid-load | requests **hang** until Redis returns | requests **fail fast** — `RedisCommandTimeoutException` after the 2s command timeout (no thread hang) |
+| After Redis returns | full recovery, 0 errors | **full recovery** — 127 rps, p99 74ms, **0 failures, 0 timeouts** once Lettuce reconnects |
+
+During the outage the cache path errors (expected — Locke's caches need Redis); the win is it
+**degrades fast and recovers** instead of hanging. For zero-downtime through a Redis failure, run
+Redis HA (Sentinel/Cluster) so there is no single-node outage. The same fixed image also resolves
+`KC_CACHE_REDIS_URL` correctly under `start --optimized` (no `KC_SPI_…URL` workaround needed).
 
 ## 6. Rolling version upgrade 26.3.5 → 26.6.1 under load
 
@@ -138,6 +149,23 @@ a small, **bounded** disruption window driven by Infinispan's departure (not Loc
 switch, do the cutover in a brief maintenance window or drain pods one at a time. This is a far
 better outcome than the cross-version Infinispan *upgrade* (which is a full outage).
 
+## 8. Redis placement: embedded (colocated) vs external (cross-node)
+
+Does it matter whether Redis sits on the same node as Keycloak or on a separate one? Compared
+Redis on a dedicated node (external, a network hop from every KC pod) vs Redis colocated on a KC
+node, same load.
+
+| Load | External (Redis on separate node) | Colocated (Redis on a KC node) |
+|---|---|---|
+| 80 ups | 270 rps, p99 81ms | 270 rps, p99 75ms |
+| 160 ups | 541 rps, p99 93ms | 540 rps, p99 112ms |
+| 250 ups | both saturate (multi-second p99, run-to-run noise) | |
+
+**Finding: placement is negligible** below saturation — throughput is identical and p99 differs by
+only ~6–20ms (within noise). Locke's in-JVM L1 (Caffeine) absorbs most reads, so the Redis round
+trip rarely gates a request. **Practical implication: a managed/external Redis on the same network
+is fine** — you don't need to colocate Redis with Keycloak for performance.
+
 ---
 
 ## Takeaways
@@ -153,9 +181,10 @@ better outcome than the cross-version Infinispan *upgrade* (which is a full outa
 5. **Adopting Locke (same version):** lands cleanly at throughput parity; the live cutover has only
    a bounded ~60–75s blip (0.02% failures), driven by Infinispan's departure — best done in a short
    maintenance window.
-6. **Known gaps to fix:** bound the Redis client timeout (outage currently hangs in-flight
-   requests, though it recovers); ship a properly-versioned Locke 26.3.5 image for a clean
-   upgrade-path measurement.
+6. **Gaps found and fixed (in `26.6.2-2`):** the Redis client timeout (outage no longer hangs —
+   fails fast at 2s and recovers) and `KC_CACHE_REDIS_URL` honored under `--optimized`. A
+   properly-versioned Locke 26.3.5 image now exists, so the cross-version upgrade path was measured
+   (section 6). For zero-downtime through a Redis failure, run Redis HA (Sentinel/Cluster).
 
 ## Caveats
 
