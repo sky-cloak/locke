@@ -80,7 +80,7 @@ public class DefaultRedisConnectionProviderFactory
             logger.info("Initializing Redis connection provider");
 
             // Read configuration
-            String connectionUri = config.get("url", "redis://localhost:6379");
+            String connectionUri = resolveConnectionUri();
             RedisConnectionConfig redisConfig = RedisConnectionConfig.parse(connectionUri);
 
             // Create client manager
@@ -137,6 +137,26 @@ public class DefaultRedisConnectionProviderFactory
     @Override
     public void init(Config.Scope config) {
         this.config = config;
+    }
+
+    // Resolve the Redis URL. Primary source is the SPI scope (populated by the cache-redis-url
+    // property mapper). Under `start --optimized` that runtime mapper may not populate the SPI
+    // scope, so fall back to the user-facing option / env var before the localhost default —
+    // otherwise KC_CACHE_REDIS_URL is silently ignored and Locke connects to localhost.
+    private String resolveConnectionUri() {
+        String uri = config.get("url");
+        if (uri != null && !uri.isBlank()) {
+            return uri;
+        }
+        String sys = System.getProperty("kc.cache-redis-url");
+        if (sys != null && !sys.isBlank()) {
+            return sys;
+        }
+        String env = System.getenv("KC_CACHE_REDIS_URL");
+        if (env != null && !env.isBlank()) {
+            return env;
+        }
+        return "redis://localhost:6379";
     }
 
     @Override

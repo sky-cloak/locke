@@ -55,7 +55,9 @@ public class RedissonClientFactory {
                         .setConnectionPoolSize(config.getPoolMaxSize())
                         .setConnectionMinimumIdleSize(config.getPoolMinSize())
                         .setTimeout((int) config.getTimeout().toMillis())
-                        .setConnectTimeout((int) config.getTimeout().toMillis());
+                        .setConnectTimeout((int) config.getTimeout().toMillis())
+                        .setRetryAttempts(config.getRetryAttempts())
+                        .setRetryInterval((int) config.getRetryDelay().toMillis());
 
                 logger.infof("Creating Redisson client for standalone Redis: %s", address);
                 break;
@@ -71,7 +73,9 @@ public class RedissonClientFactory {
                         .setMasterConnectionPoolSize(config.getPoolMaxSize())
                         .setMasterConnectionMinimumIdleSize(config.getPoolMinSize())
                         .setTimeout((int) config.getTimeout().toMillis())
-                        .setConnectTimeout((int) config.getTimeout().toMillis());
+                        .setConnectTimeout((int) config.getTimeout().toMillis())
+                        .setRetryAttempts(config.getRetryAttempts())
+                        .setRetryInterval((int) config.getRetryDelay().toMillis());
 
                 // Add sentinel addresses
                 for (RedisConnectionConfig.HostPort host : config.getHosts()) {
@@ -89,7 +93,9 @@ public class RedissonClientFactory {
                         .setMasterConnectionPoolSize(config.getPoolMaxSize())
                         .setMasterConnectionMinimumIdleSize(config.getPoolMinSize())
                         .setTimeout((int) config.getTimeout().toMillis())
-                        .setConnectTimeout((int) config.getTimeout().toMillis());
+                        .setConnectTimeout((int) config.getTimeout().toMillis())
+                        .setRetryAttempts(config.getRetryAttempts())
+                        .setRetryInterval((int) config.getRetryDelay().toMillis());
 
                 // Add cluster nodes
                 for (RedisConnectionConfig.HostPort host : config.getHosts()) {
