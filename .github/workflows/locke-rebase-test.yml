@@ -1,8 +1,10 @@
-# Locke: daily rebase test against the latest upstream Keycloak release.
-# Rebases the Locke patch set onto the newest keycloak/keycloak release tag (not
-# bleeding-edge main) and checks it still builds. Conflicts confined to files Locke
-# intentionally diverges on (e.g. README.md) are auto-resolved; only a conflict in
-# the actual patch surface opens a tracking issue so a human can resolve it.
+# Locke: daily check that the Redis patch still applies to the latest Keycloak release.
+# Rebases onto the newest keycloak/keycloak release tag (not bleeding-edge main). Because
+# our branch is version-pinned, a rebase onto a different release always conflicts on
+# <version> strings across poms; that is noise. So we auto-resolve every conflict EXCEPT
+# those in the Redis patch source (model/redis + the few patched files), and only open a
+# tracking issue when the patch source itself conflicts. Full apply + version-bump + build
+# verification is the job of `locke-bump` (scripts/rebase-onto.sh) when actually cutting a release.
 name: locke-rebase-test
 
 on:
@@ -37,9 +39,11 @@ jobs:
       - name: Attempt rebase onto latest upstream release
         id: rebase
         env:
-          # Files Locke intentionally diverges on; a conflict confined to these is
-          # expected (e.g. our own README) and is auto-resolved by keeping ours.
-          IGNORE_CONFLICTS: 'README.md'
+          # Only conflicts in the Redis *patch source* are a real signal. Everything
+          # else (README, version-bumped poms, unrelated upstream churn) is auto-resolved
+          # by keeping our side, because rebasing a version-pinned branch onto a different
+          # release tag always conflicts on <version> strings, which is noise, not breakage.
+          CARE_RE: '(^model/redis/)|(/CachingOptions\.java$)|(/CachingPropertyMappers\.java$)|(/KeycloakProcessor\.java$)|(^model/infinispan/.*ProviderFactory\.java$)'
         run: |
           set +e
           # Latest upstream Keycloak *release* tag (plain X.Y.Z, no suffix). We track
@@ -51,16 +55,15 @@ jobs:
           git fetch upstream "refs/tags/${LATEST}:refs/tags/${LATEST}" 2>/dev/null
           git rebase "${LATEST}"
           if [ $? -eq 0 ]; then echo "result=clean" >> "$GITHUB_OUTPUT"; exit 0; fi
-          # Build an ignore regex from IGNORE_CONFLICTS and auto-resolve those files
-          # (keep ours). Only a conflict in a NON-ignored file is a real signal.
-          IGNORE_RE="^($(echo "$IGNORE_CONFLICTS" | tr ', ' '\n' | sed '/^$/d;s/\./\\./g' | paste -sd'|' -))$"
-          for _ in $(seq 1 50); do
+          # Replay the patch; auto-resolve any non-patch-source conflict (keep ours) and
+          # only flag a conflict that lands in the Redis patch source itself.
+          for _ in $(seq 1 100); do
             CONFLICTS="$(git diff --name-only --diff-filter=U)"
             [ -z "$CONFLICTS" ] && break
-            REAL="$(echo "$CONFLICTS" | grep -vE "$IGNORE_RE")"
+            REAL="$(echo "$CONFLICTS" | grep -E "$CARE_RE")"
             if [ -n "$REAL" ]; then
               echo "result=conflict" >> "$GITHUB_OUTPUT"
-              { echo "Rebasing Locke onto upstream ${LATEST} hit conflicts outside the intentionally-divergent files (${IGNORE_CONFLICTS}):"; echo "$REAL"; } > /tmp/conflict.txt
+              { echo "Rebasing the Locke Redis patch onto Keycloak ${LATEST} conflicts in the patch source:"; echo "$REAL"; } > /tmp/conflict.txt
               git rebase --abort
               exit 0
             fi
@@ -70,18 +73,6 @@ jobs:
           done
           git rebase --abort 2>/dev/null
           echo "result=clean" >> "$GITHUB_OUTPUT"
-
-      - name: Set up JDK 21
-        if: steps.rebase.outputs.result == 'clean'
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: maven
-
-      - name: Build after rebase (dist + redis module)
-        if: steps.rebase.outputs.result == 'clean'
-        run: ./mvnw -pl model/redis,quarkus/dist -am -B -DskipTests install
 
       - name: Open issue on rebase conflict
         if: steps.rebase.outputs.result == 'conflict'
