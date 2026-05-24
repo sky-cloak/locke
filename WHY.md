@@ -80,7 +80,7 @@ ElastiCache/MemoryDB, Azure Cache for Redis, GCP Memorystore.
   backend delivers **~100% throughput parity** with embedded Infinispan (within
   ~0.1% to 250 logins/sec, zero errors on both). It trades a little read latency
   (in-process Infinispan reads beat a Redis round trip) for a large resilience
-  gain: when a node is lost, Infinispan stalls ~31–40s rebalancing while Locke
+  gain: when a node is lost, Infinispan stalls ~31-40s rebalancing while Locke
   keeps serving from Redis with sub-second p99. Cross-version upgrades also roll
   under load (no JGroups version barrier). Full methodology and numbers in
   [benchmark/k8s-ovh/REPORT.md](./benchmark/k8s-ovh/REPORT.md).

@@ -4,7 +4,7 @@
 
 [![Build](https://github.com/sky-cloak/locke/actions/workflows/pr.yml/badge.svg)](https://github.com/sky-cloak/locke/actions/workflows/pr.yml)
 [![Benchmarks](https://img.shields.io/badge/benchmarks-methodology%20%26%20results-blue)](./benchmark/RESULTS.md)
-[![Keycloak compatibility](https://img.shields.io/badge/Keycloak-26.6.1-blue)](./COMPATIBILITY.md)
+[![Keycloak compatibility](https://img.shields.io/badge/Keycloak-26.6.2-blue)](./COMPATIBILITY.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE.txt)
 
 Locke is a distribution of [Keycloak](https://www.keycloak.org) that ships with
@@ -24,13 +24,13 @@ Both backends ship in the same binary. Choose with one environment variable.
 # Default: embedded Infinispan, identical to upstream Keycloak
 docker run --rm -p 8080:8080 \
   -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
-  ghcr.io/sky-cloak/locke:26.6.1-1 start-dev
+  ghcr.io/sky-cloak/locke:26.6.2-2 start-dev
 
 # Redis backend: point it at any Redis / Valkey / wire-compatible store
 docker run --rm -p 8080:8080 \
   -e KC_CACHE=redis -e KC_CACHE_REDIS_URL=redis://my-redis:6379 \
   -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
-  ghcr.io/sky-cloak/locke:26.6.1-1 start-dev
+  ghcr.io/sky-cloak/locke:26.6.2-2 start-dev
 ```
 
 Or with compose (Postgres + Redis + Locke):
@@ -68,8 +68,12 @@ Locke build 1." This is the Percona Server / Amazon Corretto convention.
 
 | Locke | Built from Keycloak | Status |
 |---|---|---|
-| `26.6.1-1` | 26.6.1 | current |
-| `26.3.5-1` | 26.3.5 | previous |
+| `26.6.2-2` | 26.6.2 | current |
+| `26.6.1-2` | 26.6.1 | maintained |
+| `26.3.5-3` | 26.3.5 | maintained |
+
+The latest build on each line carries the Redis client fixes (bounded outage timeout
+and `KC_CACHE_REDIS_URL` honored under `--optimized`).
 
 See [COMPATIBILITY.md](./COMPATIBILITY.md) for the full matrix and support window.
 
@@ -89,7 +93,7 @@ Redis."
 In a 3-pod production cluster (`start --optimized`) on isolated nodes, the Redis
 backend delivers **~100% throughput parity** with embedded Infinispan (within ~0.1%
 to 250 logins/sec, zero errors on both). The trade is a little read latency for a
-large resilience gain: when a node is lost, Infinispan stalls ~31–40s rebalancing
+large resilience gain: when a node is lost, Infinispan stalls ~31-40s rebalancing
 (JGroups state transfer) while Locke keeps serving from Redis at sub-second p99.
 Cross-version upgrades roll under load too (no JGroups version barrier), whereas an
 Infinispan rolling upgrade across an incompatible version is an outage. Full
