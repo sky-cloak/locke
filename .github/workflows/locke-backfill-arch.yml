@@ -48,14 +48,23 @@ jobs:
 
       - name: Registry logins
         run: |
-          # GHCR is the build target (buildx --push reads ~/.docker/config.json).
+          # GHCR is the build target (buildx --push reads ~/.docker/config.json) and is required.
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          # Quay + Docker Hub go through skopeo, which accepts the email/org-style
-          # usernames the docker CLI rejects (the docker.io 'docker login' fails with
-          # these creds, but 'skopeo login' + 'skopeo copy' work, as proven by locke-mirror).
+          # Quay + Docker Hub are mirror targets via skopeo. A failed login on a mirror
+          # registry (e.g. a rotated/expired token) must NOT abort the whole backfill:
+          # GHCR plus any registry that did authenticate should still get arm64. We
+          # record success in $GITHUB_ENV and gate the mirror steps on those flags.
           sudo apt-get update && sudo apt-get install -y skopeo
-          if [ -n "$QUAY_TOKEN" ];      then skopeo login quay.io   -u "$QUAY_USER"      --password "$QUAY_TOKEN";      else echo "no quay creds"; fi
-          if [ -n "$DOCKERHUB_TOKEN" ]; then skopeo login docker.io -u "$DOCKERHUB_USER" --password "$DOCKERHUB_TOKEN"; else echo "no dockerhub creds"; fi
+          if [ -n "$QUAY_TOKEN" ] && skopeo login quay.io -u "$QUAY_USER" --password "$QUAY_TOKEN"; then
+            echo "QUAY_OK=1" >> "$GITHUB_ENV"
+          else
+            echo "Quay login unavailable; skipping Quay mirror."
+          fi
+          if [ -n "$DOCKERHUB_TOKEN" ] && skopeo login docker.io -u "$DOCKERHUB_USER" --password "$DOCKERHUB_TOKEN"; then
+            echo "DOCKERHUB_OK=1" >> "$GITHUB_ENV"
+          else
+            echo "Docker Hub login unavailable; skipping Docker Hub mirror."
+          fi
 
       - name: Rebuild each tag multi-arch on GHCR, then mirror to Quay + Docker Hub
         run: |
@@ -71,8 +80,8 @@ jobs:
               -t "$IMAGE:$TAG" \
               --provenance=false \
               --push
-            if [ -n "$QUAY_TOKEN" ];      then skopeo copy --all "docker://$IMAGE:$TAG" "docker://$QUAY_IMAGE:$TAG";      fi
-            if [ -n "$DOCKERHUB_TOKEN" ]; then skopeo copy --all "docker://$IMAGE:$TAG" "docker://$DOCKERHUB_IMAGE:$TAG"; fi
+            if [ -n "${QUAY_OK:-}" ];      then skopeo copy --all "docker://$IMAGE:$TAG" "docker://$QUAY_IMAGE:$TAG";      fi
+            if [ -n "${DOCKERHUB_OK:-}" ]; then skopeo copy --all "docker://$IMAGE:$TAG" "docker://$DOCKERHUB_IMAGE:$TAG"; fi
             echo "::endgroup::"
           done
 
@@ -80,5 +89,5 @@ jobs:
         run: |
           set -euo pipefail
           docker buildx imagetools create -t "$IMAGE:latest" "$IMAGE:$LATEST_TAG"
-          if [ -n "$QUAY_TOKEN" ];      then skopeo copy --all "docker://$IMAGE:latest" "docker://$QUAY_IMAGE:latest";      fi
-          if [ -n "$DOCKERHUB_TOKEN" ]; then skopeo copy --all "docker://$IMAGE:latest" "docker://$DOCKERHUB_IMAGE:latest"; fi
+          if [ -n "${QUAY_OK:-}" ];      then skopeo copy --all "docker://$IMAGE:latest" "docker://$QUAY_IMAGE:latest";      fi
+          if [ -n "${DOCKERHUB_OK:-}" ]; then skopeo copy --all "docker://$IMAGE:latest" "docker://$DOCKERHUB_IMAGE:latest"; fi
