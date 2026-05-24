@@ -48,11 +48,16 @@ jobs:
 
       - name: Registry logins
         run: |
+          # GHCR is the build target (buildx --push reads ~/.docker/config.json).
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          if [ -n "$QUAY_TOKEN" ]; then echo "$QUAY_TOKEN" | docker login quay.io -u "$QUAY_USER" --password-stdin; else echo "no quay creds"; fi
-          if [ -n "$DOCKERHUB_TOKEN" ]; then echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USER" --password-stdin; else echo "no dockerhub creds"; fi
+          # Quay + Docker Hub go through skopeo, which accepts the email/org-style
+          # usernames the docker CLI rejects (the docker.io 'docker login' fails with
+          # these creds, but 'skopeo login' + 'skopeo copy' work, as proven by locke-mirror).
+          sudo apt-get update && sudo apt-get install -y skopeo
+          if [ -n "$QUAY_TOKEN" ];      then skopeo login quay.io   -u "$QUAY_USER"      --password "$QUAY_TOKEN";      else echo "no quay creds"; fi
+          if [ -n "$DOCKERHUB_TOKEN" ]; then skopeo login docker.io -u "$DOCKERHUB_USER" --password "$DOCKERHUB_TOKEN"; else echo "no dockerhub creds"; fi
 
-      - name: Rebuild each tag multi-arch and push
+      - name: Rebuild each tag multi-arch on GHCR, then mirror to Quay + Docker Hub
         run: |
           set -euo pipefail
           for TAG in $TAGS; do
@@ -60,15 +65,14 @@ jobs:
             rm -f quarkus/container/keycloak-*.tar.gz
             gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p 'keycloak-*.tar.gz' -D quarkus/container --clobber
             DIST_FILE="$(basename "$(ls quarkus/container/keycloak-*.tar.gz)")"
-            TAG_ARGS="-t $IMAGE:$TAG"
-            [ -n "$QUAY_TOKEN" ]      && TAG_ARGS="$TAG_ARGS -t $QUAY_IMAGE:$TAG"
-            [ -n "$DOCKERHUB_TOKEN" ] && TAG_ARGS="$TAG_ARGS -t $DOCKERHUB_IMAGE:$TAG"
             docker buildx build quarkus/container \
               --platform linux/amd64,linux/arm64 \
               --build-arg KEYCLOAK_DIST="$DIST_FILE" \
-              $TAG_ARGS \
+              -t "$IMAGE:$TAG" \
               --provenance=false \
               --push
+            if [ -n "$QUAY_TOKEN" ];      then skopeo copy --all "docker://$IMAGE:$TAG" "docker://$QUAY_IMAGE:$TAG";      fi
+            if [ -n "$DOCKERHUB_TOKEN" ]; then skopeo copy --all "docker://$IMAGE:$TAG" "docker://$DOCKERHUB_IMAGE:$TAG"; fi
             echo "::endgroup::"
           done
 
@@ -76,5 +80,5 @@ jobs:
         run: |
           set -euo pipefail
           docker buildx imagetools create -t "$IMAGE:latest" "$IMAGE:$LATEST_TAG"
-          if [ -n "$QUAY_TOKEN" ];      then docker buildx imagetools create -t "$QUAY_IMAGE:latest"      "$QUAY_IMAGE:$LATEST_TAG"; fi
-          if [ -n "$DOCKERHUB_TOKEN" ]; then docker buildx imagetools create -t "$DOCKERHUB_IMAGE:latest" "$DOCKERHUB_IMAGE:$LATEST_TAG"; fi
+          if [ -n "$QUAY_TOKEN" ];      then skopeo copy --all "docker://$IMAGE:latest" "docker://$QUAY_IMAGE:latest";      fi
+          if [ -n "$DOCKERHUB_TOKEN" ]; then skopeo copy --all "docker://$IMAGE:latest" "docker://$DOCKERHUB_IMAGE:latest"; fi
