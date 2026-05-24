@@ -17,8 +17,11 @@
 
 package org.keycloak.connections.redis;
 
+import io.lettuce.core.ClientOptions;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.RedisURI;
+import io.lettuce.core.TimeoutOptions;
+import io.lettuce.core.cluster.ClusterClientOptions;
 import io.lettuce.core.cluster.RedisClusterClient;
 import io.lettuce.core.cluster.api.StatefulRedisClusterConnection;
 import io.lettuce.core.api.StatefulRedisConnection;
@@ -91,6 +94,7 @@ public class RedisClientManager {
 
         RedisURI redisURI = uriBuilder.build();
         this.standaloneClient = RedisClient.create(redisURI);
+        this.standaloneClient.setOptions(buildClientOptions());
 
         this.connectionPool = ConnectionPoolSupport.createGenericObjectPool(
                 () -> standaloneClient.connect(new ByteArrayCodec()),
@@ -146,6 +150,7 @@ public class RedisClientManager {
 
         RedisURI redisURI = uriBuilder.build();
         this.standaloneClient = RedisClient.create(redisURI);
+        this.standaloneClient.setOptions(buildClientOptions());
 
         this.connectionPool = ConnectionPoolSupport.createGenericObjectPool(
                 () -> standaloneClient.connect(new ByteArrayCodec()),
@@ -167,6 +172,20 @@ public class RedisClientManager {
                 .collect(Collectors.toList());
 
         this.clusterClient = RedisClusterClient.create(clusterUris);
+        this.clusterClient.setOptions(ClusterClientOptions.builder()
+                .autoReconnect(true)
+                .disconnectedBehavior(ClientOptions.DisconnectedBehavior.REJECT_COMMANDS)
+                .timeoutOptions(TimeoutOptions.enabled(config.getTimeout()))
+                .build());
+    }
+
+    // See initStandaloneClient: fail fast on a Redis outage instead of hanging request threads.
+    private ClientOptions buildClientOptions() {
+        return ClientOptions.builder()
+                .autoReconnect(true)
+                .disconnectedBehavior(ClientOptions.DisconnectedBehavior.REJECT_COMMANDS)
+                .timeoutOptions(TimeoutOptions.enabled(config.getTimeout()))
+                .build();
     }
 
     /**
