@@ -1,0 +1,40 @@
+REAL CROSS-VERSION LOCKE UPGRADES UNDER LOAD (2026-05-24)
+==========================================================
+Properly-versioned Locke images (built from real KC tags, version.txt correct):
+  locke:26.3.5 / :26.3.5-1   (version.txt = 26.3.5; built from the original feature/redis 26.3.5-1
+                              tag with mvn versions:set 26.3.5 — fixes the old 999.0.0-SNAPSHOT image)
+  locke:26.6.1-1             (version.txt = 26.6.1)
+  locke:26.6.2 / :26.6.2-1   (version.txt = 26.6.2; redis commit cherry-picked clean onto 26.6.2,
+                              model/redis pom version bumped to 26.6.2)
+Bench images: locke-bench-locke:{26.3.5,26.6.1,26.6.2} (start --optimized, --db=postgres --cache=redis).
+
+Method: kc-mig StatefulSet (3 pods, Locke/redis), fresh DB per test (old version owns schema),
+windowed 15s load (50 ups), image flipped at window 3 = rolling upgrade. macOS-safe hang guard.
+
+TEST 1 — Locke 26.3.5 -> 26.6.1 (real version jump, full DB forward-migration)
+  w1-w2  26.3.5 3/3     ~155 rps, p99 120-195ms, 0% fail   (baseline)
+  --- set image 26.6.1 ---
+  w3     /3 (start)     p99 119ms, 0% fail
+  w4     1/2 migrating  p99 823ms, 0% fail
+  w5     2/2 PEAK       p99 2185ms, 0.02% fail
+  w6     3/2            p99 1359ms, 0% fail
+  w7-w9  3/3 on 26.6.1  p99 99-104ms, 0% fail   (stable, recovered)
+  => completes gracefully under load; ~85s elevated-latency window (peak ~2.2s p99) + one 0.02%
+     blip during the DB migration, then clean. NO hang, NO crash-loop.
+
+TEST 2 — Locke 26.6.1 -> 26.6.2 (patch upgrade)
+  w1-w2  26.6.1 3/3     ~156 rps, p99 134-160ms, 0% fail
+  --- set image 26.6.2 ---
+  w3     /3 (start)     p99 125ms, 0% fail
+  w4     1/2            p99 1428ms, 0% fail
+  w5     2/2            p99 715ms,  0% fail
+  w6-w9  ->3/3 26.6.2   p99 97-150ms, 0% fail
+  => ZERO failures end-to-end; brief p99 bump (~1.4s peak) during rollout; fast recovery.
+
+CONTRAST
+  - vanilla Infinispan 26.3.5->26.6.1 (real upstream images): rolling upgrade across the incompatible
+    Infinispan/JGroups major (15->16) HANGS (cache-layer outage) until all pods reach 26.6.1.
+  - earlier broken Locke "26.3.5" image (999.0.0-SNAPSHOT): crash-looped (26.6.1 refused the
+    apparently-newer schema). FIXED by building a properly-versioned 26.3.5.
+  TAKEAWAY: Locke removes the JGroups cluster-protocol version barrier; cross-version Locke upgrades
+  roll under load with only a transient latency bump from the standard Keycloak DB migration.

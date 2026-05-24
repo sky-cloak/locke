@@ -1,0 +1,17 @@
+# Load generator pod (durable image; run-kcb.sh + kcb.jar + realm.json baked in).
+# Sits on the infra node alongside Postgres/Redis, isolated from the KC pods.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: loadgen
+  namespace: locke-bench
+  labels: { app: loadgen }
+spec:
+  nodeSelector: { bench-role: infra }
+  imagePullSecrets: [ { name: ghcr-pull } ]
+  containers:
+    - name: loadgen
+      image: ghcr.io/sky-cloak/locke-bench-loadgen:1
+      resources:
+        requests: { cpu: "4", memory: 4Gi }
+        limits: { cpu: "8", memory: 6Gi }

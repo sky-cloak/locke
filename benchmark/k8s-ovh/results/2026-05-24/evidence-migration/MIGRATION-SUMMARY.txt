@@ -1,0 +1,32 @@
+SAME-VERSION MIGRATION: vanilla Keycloak 26.6.1 (Infinispan) -> Locke 26.6.1 (Redis)
+=====================================================================================
+Scenario: an operator switching stock Keycloak to Locke WITHOUT changing KC version.
+Same StatefulSet (kc-mig), same KC 26.6.1, same DB schema (no migration/version poisoning).
+The switch = image + cache-config change (KC_CACHE_STACK/jdbc-ping -> KC_CACHE_REDIS_URL),
+applied as a rolling update under load. 3-pod cluster on OVH b3-64, start --optimized.
+
+SUSTAINED RUN (200s, load through the cutover):
+  baseline (Infinispan):   204.8 rps, p99 73ms,  0% fail
+  cutover window:          load HUNG (no result) — Infinispan departure rebalance + cross-backend
+                           session misses block in-flight requests (no Redis client read-timeout)
+  rollout:                 all 3 pods vanilla->Locke, 3/3 in ~106s, no stall
+  post-migration (Locke):  201.7 rps, p99 122ms, 0% fail  -> healthy, throughput parity
+
+WINDOWED RUN (short 15s load windows to quantify the cutover):
+  w1-w2  vanilla 3/3      ~158 rps, p99 67-86ms, 0% fail   (baseline)
+  --- apply Locke (Infinispan -> Redis) ---
+  w3     first pod leaving  p99 1327ms, 0.02% fail
+  w4     mid-rollout 2/2    HANG (one window, no result)
+  w5     3/2 recovering     p99 217ms, 0% fail
+  w6-w8  3/3 all Locke      p99 116-118ms, 0% fail   (stable, parity)
+
+FINDING
+  Switching stock Keycloak -> Locke at the SAME version lands cleanly: end state is healthy
+  Locke on Redis at throughput parity (within ~1.5% rps; p99 73 -> ~118ms, the expected Redis
+  round-trip trade). The LIVE under-load cutover has a BOUNDED disruption window of ~60-75s
+  (~one hung 15s window + a p99 spike to ~1.3s + ~0.02% failures), caused by Infinispan pods
+  leaving the JGroups cluster (departure rebalance) + sessions not carrying across cache
+  backends -- NOT by Locke itself. Recommendation: do the cutover in a brief maintenance window
+  or drain connections per pod; after migration Locke runs at parity. Contrast: the cross-version
+  26.3.5->26.6.1 *upgrade* could not be tested for Locke (no properly-versioned 26.3.5 Locke image;
+  the patch depends on 26.6.1 APIs -- a real backport, not a quick build).

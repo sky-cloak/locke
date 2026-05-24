@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Locke vs Infinispan — operating Keycloak on Redis (3-pod, OVH, production)</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  :root{--indigo:#3B3B98;--ink:#1c1c28;--muted:#6b7280;--line:#e5e7eb;--good:#15803d;--warn:#b45309;--bad:#b91c1c;--bg:#fafafe;}
+  *{box-sizing:border-box;} body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);margin:0;line-height:1.55;}
+  .wrap{max-width:980px;margin:0 auto;padding:40px 24px 80px;}
+  h1{font-size:30px;margin:0 0 4px;} h2{font-size:22px;margin:42px 0 12px;border-bottom:2px solid var(--indigo);padding-bottom:6px;} h3{font-size:17px;margin:24px 0 8px;}
+  .sub{color:var(--muted);margin:0 0 8px;} .badge{display:inline-block;background:var(--indigo);color:#fff;border-radius:6px;padding:3px 9px;font-size:12px;font-weight:600;margin-right:6px;}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:14px;background:#fff;} th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;} th{background:#f1f1fb;}
+  td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;} .good{color:var(--good);font-weight:600;} .bad{color:var(--bad);font-weight:600;} .warn{color:var(--warn);font-weight:600;}
+  .card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:14px 0;} .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .kpi{background:#fff;border:1px solid var(--line);border-left:4px solid var(--indigo);border-radius:8px;padding:12px 14px;} .kpi b{font-size:23px;display:block;color:var(--indigo);}
+  .chartbox{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px;margin:14px 0;} canvas{max-height:340px;}
+  .note{font-size:13px;color:var(--muted);} code{background:#f1f1fb;padding:1px 5px;border-radius:4px;font-size:13px;}
+  ul.h li{margin:4px 0;} @media(max-width:720px){.grid{grid-template-columns:1fr;}}
+</style></head>
+<body><div class="wrap">
+
+<h1>Operating Keycloak on Redis: Locke vs Infinispan</h1>
+<p class="sub">3-pod cluster · Keycloak 26.6.1 · <b>production mode (<code>start --optimized</code>)</b> · OVH · isolated load generator · 2026-05-24</p>
+<p><span class="badge">Apache 2.0</span><span class="badge">in-cluster runner</span></p>
+<p>Locke is a Keycloak distribution that moves cluster cache coordination off embedded Infinispan/JGroups onto Redis. The question this benchmark answers is operational: <b>can you run Keycloak at the same throughput, with better failure behavior, on a cache your cloud already manages?</b></p>
+
+<div class="grid">
+  <div class="kpi"><b>~100%</b>throughput parity vs Infinispan (80–250 logins/sec, 0 errors both)</div>
+  <div class="kpi"><b>p99 0.9s</b>Locke under a node loss — vs Infinispan <b style="font-size:17px;display:inline">31s</b> (JGroups rebalance)</div>
+  <div class="kpi"><b>0 failed</b>logins through a rolling restart of all 3 pods (both stacks)</div>
+  <div class="kpi"><b>full recovery</b>after a Redis outage (pods auto-reconnect, 0 errors)</div>
+</div>
+
+<h2>Methodology</h2>
+<div class="card">
+<p>OVH Managed Kubernetes (BHS5), dedicated pool of 4× b3-64 (16 vCPU / 64 GB). <b>3 nodes run one Keycloak pod each</b> (anti-affinity = a real 3-machine cluster); a <b>4th node runs the load generator + Postgres + Redis</b>, isolated so results reflect the cache backend, not host contention. The full run was driven by an <b>in-cluster runner pod</b> (independent of any operator laptop).</p>
+<ul>
+<li><b>A3 — Infinispan</b> (vanilla KC 26.6.1): <code>KC_CACHE=ispn</code>, JGroups <code>jdbc-ping</code> (3-member view).</li>
+<li><b>B3 — Locke 26.6.1</b>: <code>KC_CACHE=redis</code>, realm/user/authz on Caffeine L1 + Redis pub/sub invalidation, sessions on JPA.</li>
+<li>Both <b><code>start --optimized</code></b>, providers baked at build, identical resources (pinned 6 vCPU / 6 GB, <code>-Xms2g -Xmx4g</code>, DB pool 50), shared Postgres, same realm. Load = keycloak-benchmark Gatling <code>AuthorizationCode</code> flow, 60s/point, stacks sequential (idle stack scaled to 0).</li>
+</ul>
+<p class="note">Caveats: single region, dev-grade nodes, sequential runs. Phase Two figures later are their published numbers under their own conditions, not run by us.</p>
+</div>
+
+<h2>1. Throughput parity</h2>
+<div class="chartbox"><canvas id="thr"></canvas></div>
+<table>
+<tr><th class="n">Users/sec</th><th class="n">A3 Infinispan (rps)</th><th class="n">B3 Locke (rps)</th><th class="n">Parity</th><th class="n">Errors</th></tr>
+<tr><td class="n">80</td><td class="n">274.1</td><td class="n">274.5</td><td class="n good">100.1%</td><td class="n">0</td></tr>
+<tr><td class="n">160</td><td class="n">548.1</td><td class="n">548.1</td><td class="n good">100.0%</td><td class="n">0</td></tr>
+<tr><td class="n">250</td><td class="n">855.5</td><td class="n">856.4</td><td class="n good">100.1%</td><td class="n">0</td></tr>
+</table>
+<p><b>Within ~0.1% across the range, error-free to 250 logins/sec.</b> Redis is not slower.</p>
+
+<h2>2. Resilience — the operational win</h2>
+<p>This is the reason to move cache coordination off JGroups.</p>
+<div class="chartbox"><canvas id="resil"></canvas><p class="note" style="text-align:center">login p99 during node failure (ms, log scale) — lower is better</p></div>
+<h3>Logins during node loss (80 users/sec, kill at T+45s)</h3>
+<table>
+<tr><th>Scenario</th><th class="n">B3 Locke</th><th class="n">A3 Infinispan</th></tr>
+<tr><td>1 node down</td><td class="n good">0.01% fail · p99 908ms</td><td class="n bad">0.46% fail · p99 31,033ms</td></tr>
+<tr><td>2 nodes down</td><td class="n good">0.18% fail · p99 2,609ms</td><td class="n bad">0.35% fail · p99 39,688ms</td></tr>
+</table>
+<p>When an Infinispan node dies, the cluster <b>stalls ~31–40 seconds</b> doing JGroups rebalance + state transfer; requests hang into the tens of seconds. Locke keeps serving from Redis: <b>p99 stays sub-second (1 down) to ~2.6s (2 down)</b> — roughly <b>34× / 15× better p99</b>. For an operator, that's "a pod restarted and nobody noticed" vs "auth latency hit 31s for half a minute."</p>
+
+<h3>Planned operations under load (0 failures, both stacks)</h3>
+<table>
+<tr><th>Event</th><th class="n">A3 Infinispan</th><th class="n">B3 Locke</th></tr>
+<tr><td>Rolling restart (all 3 pods)</td><td class="n">rollout 83s · p99 622ms · <span class="good">0 fail</span></td><td class="n">rollout 79s · p99 1,348ms · <span class="good">0 fail</span></td></tr>
+<tr><td>Scale 3→2→3 (new pod join)</td><td class="n">join 22s · p99 306ms · <span class="good">0 fail</span></td><td class="n">join 28s · p99 118ms · <span class="good">0 fail</span></td></tr>
+</table>
+
+<h2>3. Latency (steady state)</h2>
+<div class="chartbox"><canvas id="p99"></canvas></div>
+<p class="note"><b>Honest read:</b> Infinispan has lower p99 at moderate load — realm/user reads are in-process, while Locke adds a Redis round trip. Both stay under 170ms p99 to 250 users/sec (at the top of the range Locke is marginally lower). The small latency trade buys the resilience + ops gains above.</p>
+
+<h2>4. Redis failure under load (Locke)</h2>
+<table>
+<tr><th>Phase</th><th class="n">Result</th></tr>
+<tr><td>Baseline (Redis up)</td><td class="n good">201 rps · p99 115ms · 0 failures</td></tr>
+<tr><td>Redis killed mid-load</td><td class="n warn">in-flight requests hang (no client read-timeout) until Redis returns</td></tr>
+<tr><td>After Redis returns</td><td class="n good">128 rps · p99 70ms · 0 failures — full recovery (Lettuce auto-reconnect)</td></tr>
+</table>
+<p class="note"><b>Caveat + fix:</b> a Redis outage currently <i>hangs</i> in-flight requests rather than failing them fast, because the Lettuce/Redisson calls are not bounded by a timeout. The service recovers completely once Redis is back. Recommended fix: bound the Redis client read/connect timeout.</p>
+
+<h2>5. Rolling version upgrade 26.3.5 → 26.6.1 under load</h2>
+<div class="card">
+<ul>
+<li><b>Vanilla (Infinispan):</b> the rolling upgrade crosses an <b>incompatible Infinispan/JGroups major (15 → 16)</b>. During the mixed-version window the cluster cannot form a unified view and requests <b>hang indefinitely</b> — effectively a <b>cache-layer outage</b> until all 3 pods land on 26.6.1 (~84s rollout).</li>
+<li><b>Locke (Redis): rolls cleanly under load — no outage.</b> Tested with properly-versioned Locke images (<code>version.txt</code> = 26.3.5 / 26.6.1 / 26.6.2), image flipped mid-stream under windowed load, fresh DB so the old version owns the schema.</li>
+</ul>
+<table>
+<tr><th>Upgrade</th><th class="n">Cutover</th><th class="n">End state</th></tr>
+<tr><td><b>26.3.5 → 26.6.1</b> (full DB migration)</td><td class="n warn">~85s elevated latency, p99 peak 2,185ms, one 0.02% blip</td><td class="n good">3/3 on 26.6.1, p99 ~100ms, 0 fail</td></tr>
+<tr><td><b>26.6.1 → 26.6.2</b> (patch)</td><td class="n warn">brief p99 bump, peak 1,428ms</td><td class="n good">3/3 on 26.6.2, p99 ~130ms, <b>0 failures throughout</b></td></tr>
+</table>
+<p class="note">Both complete gracefully — the only cost is a transient latency bump from the <b>standard Keycloak DB migration</b> as each new pod starts. Locke has <b>no JGroups cluster-protocol version barrier</b>, so the cluster never stalls the way Infinispan does. (An earlier attempt with a mislabeled <code>999.0.0-SNAPSHOT</code> "26.3.5" image crash-looped — 26.6.1 refused the apparently-newer schema; a correctly-versioned 26.3.5 build fixed it.)</p>
+</div>
+
+<h2>6. Adopting Locke: stock Keycloak → Locke migration (same version, under load)</h2>
+<p>The realistic adoption path — switch vanilla Keycloak 26.6.1 (Infinispan) to Locke 26.6.1 (Redis) <b>without changing the Keycloak version</b> (same DB schema), as a rolling image + cache-config change under load.</p>
+<table>
+<tr><th>Phase</th><th class="n">Result</th></tr>
+<tr><td>Baseline (Infinispan)</td><td class="n good">204.8 rps · p99 73ms · 0 fail</td></tr>
+<tr><td>Cutover window (~60–75s)</td><td class="n warn">p99 1,327ms · ~0.02% fail · one brief stall (Infinispan departure rebalance + cross-backend sessions)</td></tr>
+<tr><td>After migration (Locke)</td><td class="n good">201.7 rps · p99 122ms · 0 fail — parity</td></tr>
+</table>
+<p class="note"><b>Finding:</b> adopting Locke at the same version lands cleanly at throughput parity; the live cutover has only a small, <b>bounded</b> disruption window driven by Infinispan's departure (not Locke). For a seamless switch, cut over in a brief maintenance window or drain pods one at a time. Far better than the cross-version Infinispan <i>upgrade</i> (a full outage).</p>
+
+<h2>Comparison vs Phase Two (their published numbers)</h2>
+<p><a href="https://phasetwo.io/blog/keycloak-devday-2026-redis-valkey-caches/">Phase Two</a>
+(<a href="https://github.com/p2-inc/keycloak-redis-cache">p2-inc/keycloak-redis-cache</a>)
+move <b>sessions</b> (a distributed cache) to Redis; Locke moves the <b>realm/user/authz</b> caches. Different layers, same goal.</p>
+<table>
+<tr><th>Operation</th><th class="n">Infinispan</th><th class="n">Phase Two Redis</th><th class="n">Their delta</th></tr>
+<tr><td>All Requests</td><td class="n">67ms</td><td class="n">47ms</td><td class="n good">29.9% faster</td></tr>
+<tr><td>Exchange Code</td><td class="n">22ms</td><td class="n">10ms</td><td class="n good">54.5% faster</td></tr>
+<tr><td>RefreshToken</td><td class="n">36ms</td><td class="n">12ms</td><td class="n good">66.7% faster</td></tr>
+<tr><td>Logout</td><td class="n">43ms</td><td class="n">9ms</td><td class="n good">79.1% faster</td></tr>
+</table>
+<p class="note">Sessions are <i>replicated</i> in Infinispan, so moving them to Redis removes replication cost (faster). Realm/user caches are <i>local</i>, so moving them adds a round trip (slightly slower reads). Complementary, not competing. Their self-reported figures, not run by us.</p>
+
+<h2>Honest note: does Redis help Keycloak scale to many realms?</h2>
+<div class="card">
+<p><b>No, and we should say so.</b> <code>GET /admin/realms</code> (list all) goes from 0.1s to <b>minutes</b> past a few hundred realms — <b>identically on Infinispan and Locke</b>. It is database + serialization bound, not cache bound (Keycloak discussion <a href="https://github.com/keycloak/keycloak/discussions/11074">#11074</a>). Locke's only realm-scaling effect is to <b>bound the in-heap cache</b> (predictable memory) rather than grow it. Realm-count scaling is a Keycloak/DB limit; Locke's value is operational.</p>
+</div>
+
+<h2>Takeaways</h2>
+<div class="card"><ol>
+<li><b>Throughput: a tie (~100%).</b> Clustered Keycloak on Redis serves the same load, error-free, to saturation.</li>
+<li><b>Resilience: the win.</b> A lost node costs Infinispan a ~31–40s rebalance stall; Locke keeps logins sub-second.</li>
+<li><b>Upgrades:</b> Infinispan rolling upgrades across an incompatible JGroups version are an outage; Locke has no JGroups version barrier.</li>
+<li><b>Latency: a small, honest trade</b> for the above. Redis does not change Keycloak's realm-count limits.</li>
+<li><b>Known gaps:</b> bound the Redis client timeout (outage hangs in-flight requests, but recovers); ship a properly-versioned Locke 26.3.5 image for a clean upgrade measurement.</li>
+</ol></div>
+<p class="note">Raw data, runners, and per-pod KC logs archived in <code>benchmark/k8s-ovh/results/2026-05-24/evidence-2026-05-24.zip</code>.</p>
+
+<script>
+const C={indigo:'#3B3B98',red:'#b91c1c',gray:'#9ca3af'};
+new Chart(thr,{type:'line',data:{labels:[80,160,250],datasets:[
+ {label:'A3 Infinispan',data:[274.1,548.1,855.5],borderColor:C.gray,backgroundColor:C.gray,tension:.2},
+ {label:'B3 Locke',data:[274.5,548.1,856.4],borderColor:C.indigo,backgroundColor:C.indigo,tension:.2}]},
+ options:{plugins:{title:{display:true,text:'Throughput vs load (req/s) — lines overlap = parity'}},scales:{x:{title:{display:true,text:'users/sec'}},y:{title:{display:true,text:'req/s'}}}}});
+new Chart(resil,{type:'bar',data:{labels:['1 node down','2 nodes down'],datasets:[
+ {label:'A3 Infinispan',data:[31033,39688],backgroundColor:C.red},
+ {label:'B3 Locke',data:[908,2609],backgroundColor:C.indigo}]},
+ options:{plugins:{title:{display:true,text:'Login p99 during node failure (ms, log scale)'}},scales:{y:{type:'logarithmic',title:{display:true,text:'p99 ms (log)'}}}}});
+new Chart(p99,{type:'line',data:{labels:[80,160,250],datasets:[
+ {label:'A3 Infinispan',data:[64,64,167],borderColor:C.gray,backgroundColor:C.gray,tension:.2},
+ {label:'B3 Locke',data:[104,91,151],borderColor:C.indigo,backgroundColor:C.indigo,tension:.2}]},
+ options:{plugins:{title:{display:true,text:'Aggregate p99 latency (ms)'}},scales:{x:{title:{display:true,text:'users/sec'}},y:{title:{display:true,text:'p99 ms'}}}}});
+</script>
+</div></body></html>

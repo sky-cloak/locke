@@ -1,0 +1,62 @@
+LOCKE vs VANILLA KEYCLOAK — OVH PRODUCTION BENCHMARK (2026-05-24)
+================================================================
+Cluster: OVH Managed K8s, BHS5, dedicated load-v1 pool = 4x b3-64 (16 vCPU/64GB).
+Layout: 3 nodes bench-role=kc (1 KC pod each, anti-affinity), 1 node infra (Postgres+Redis+loadgen).
+Mode: PRODUCTION. kc.sh start --optimized, providers baked at build, pinned CPU 6/6Gi, -Xms2g -Xmx4g.
+  A3 = vanilla Keycloak 26.6.1, KC_CACHE=ispn, JGroups jdbc-ping (3-member).
+  B3 = Locke 26.6.1, KC_CACHE=redis (Caffeine L1 + Redis pub/sub; sessions on JPA).
+Load: keycloak-benchmark Gatling AuthorizationCode (login->credentials->code->refresh->logout),
+      realm bench-kcb (100 users, client-0). Stacks run sequentially (idle stack scaled to 0).
+Run orchestrated by an in-cluster runner pod (laptop-independent). Source: phase-ab-matrix.log.
+
+PHASE A — VANILLA / INFINISPAN
+  Parity:   80ups -> 274.1 rps p95 59 p99 64   0% (OK 19461)
+            160ups-> 548.1 rps p95 58 p99 64   0% (OK 38912)
+            250ups-> 855.5 rps p95 64 p99 167  0% (OK 60741)
+  Node-fail 1-down: 278.5 rps p95 17356 p99 31033 ms  0.46% (207 KO / 44636 OK)
+  Node-fail 2-down: 279.4 rps p95 23853 p99 39688 ms  0.35% (159 KO / 44818 OK)
+  Rolling restart:  rollout 83s; 211.6 rps p95 301 p99 622   0% (OK 40419)
+  Scale 3->2->3:    new pod ready+joined 22s; 213.8 rps p95 35 p99 306  0% (OK 44891)
+
+PHASE B — LOCKE / REDIS
+  Parity:   80ups -> 274.5 rps p95 85  p99 104  0% (OK 19486)
+            160ups-> 548.1 rps p95 80  p99 91   0% (OK 38917)
+            250ups-> 856.4 rps p95 108 p99 151  0% (OK 60802)
+  Node-fail 1-down: 281.2 rps p95 82   p99 908  ms  0.01% (6 KO / 45268 OK)
+  Node-fail 2-down: 280.1 rps p95 1705 p99 2609 ms  0.18% (83 KO / 45012 OK)
+  Rolling restart:  rollout 79s; 212.3 rps p95 424 p99 1348  0% (OK 40541)
+  Scale 3->2->3:    new pod ready+joined 28s; 212.6 rps p95 78 p99 118  0% (OK 44866)
+  Redis failure under load:
+     baseline (redis up):            201.4 rps p95 100 p99 115  0% (OK 10270)
+     redis KILLED mid-load:          in-flight requests HANG (no client read-timeout) ->
+                                     Gatling produced no result; guard-killed at 210s.
+     after redis returns (recovery): 128.2 rps p95 65 p99 70   0% (OK 3975) -> FULL recovery.
+     KC pods auto-reconnected (Lettuce "Reconnected to redis").
+
+HEADLINE
+  - Throughput parity: within ~0.1% across 80-250 ups, 0 errors both stacks.
+  - Node loss (the win): Locke p99 908ms (1-down) / 2609ms (2-down) vs
+                         Infinispan 31033ms / 39688ms  => ~34x / ~15x better p99.
+                         Infinispan stalls on JGroups rebalance/state-transfer; Locke serves from Redis.
+  - Rolling restart + scale: both stacks 0 failures; comparable.
+  - Latency at moderate load: Infinispan slightly lower (in-proc reads) vs Locke (Redis round-trip);
+    both <170ms p99 to 250ups; Locke degrades more gracefully at saturation.
+
+PHASE C — ROLLING VERSION UPGRADE 26.3.5 -> 26.6.1 UNDER LOAD
+  Vanilla (Infinispan): rolling upgrade crosses INCOMPATIBLE Infinispan/JGroups major (15 -> 16).
+    During the mixed-version window the cluster cannot form a unified view; in-flight + new login
+    requests HANG indefinitely (observed: load generator stalled, force-terminated). Rollout ~84s;
+    service recovers only once all 3 pods are on 26.6.1. => effectively a cache-layer OUTAGE.
+  Locke (Redis): NOT cleanly measurable with current images. The "Locke 26.3.5" image reports
+    version 999.0.0-SNAPSHOT (built from the dev codebase, not a clean 26.3.5 rebase), so it stamps
+    the DB schema with a 999 version; a real 26.6.1 then refuses to start against an apparently-newer
+    schema (pod crash-loops, graceful exit ~2s after start). This is a PACKAGING/HARNESS limitation,
+    not a Locke runtime defect. Architecturally Locke has NO JGroups, hence no mixed-version cluster
+    protocol to break during an upgrade; the rolling-restart-under-load result (79s, 0 failures) is the
+    operational proxy. A clean numeric Locke upgrade run requires a properly-versioned 26.3.5 Locke build.
+
+NOTES / FOLLOW-UPS
+  - Locke Redis client lacks a bounded read/connect timeout: a Redis outage hangs in-flight request
+    threads until Redis returns (service then fully recovers). Recommend bounding Lettuce/Redisson timeouts.
+  - Locke --optimized ignores KC_CACHE_REDIS_URL; the internal SPI prop
+    KC_SPI_CONNECTIONS_REDIS__DEFAULT__URL was required to point at the Redis service.
