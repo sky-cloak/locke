@@ -143,7 +143,8 @@ public class DefaultRedisConnectionProviderFactory
     // property mapper). Under `start --optimized` that runtime mapper may not populate the SPI
     // scope, so fall back to the user-facing option / env var before the localhost default —
     // otherwise KC_CACHE_REDIS_URL is silently ignored and Locke connects to localhost.
-    private String resolveConnectionUri() {
+    // package-private for unit testing
+    String resolveConnectionUri() {
         String uri = config.get("url");
         if (uri != null && !uri.isBlank()) {
             return uri;

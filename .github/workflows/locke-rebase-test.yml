@@ -63,6 +63,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Ensure the label exists (idempotent) — gh issue create fails if it's missing.
+          gh label create rebase-conflict --color B60205 \
+            --description "Daily upstream rebase conflict" --force 2>/dev/null || true
+          # De-dupe: don't pile up a new issue every day while one is already open.
+          OPEN=$(gh issue list --label rebase-conflict --state open --json number --jq 'length')
+          if [ "${OPEN:-0}" != "0" ]; then
+            echo "An open rebase-conflict issue already exists; skipping."
+            exit 0
+          fi
           BODY=$(cat /tmp/conflict.txt)
           gh issue create \
             --title "Rebase conflict against upstream Keycloak ($(date -u +%Y-%m-%d))" \

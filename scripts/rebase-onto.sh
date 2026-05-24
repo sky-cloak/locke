@@ -50,7 +50,13 @@ if ! git rebase --onto "${TARGET}" "${BASE}" "${WORK}"; then
 fi
 
 log "bumping model/redis/pom.xml parent version to ${TARGET}"
-perl -0pi -e "s{(<artifactId>keycloak-model-pom</artifactId>\s*<groupId>org\.keycloak</groupId>\s*<version>)[^<]+(</version>)}{\${1}${TARGET}\${2}}s" model/redis/pom.xml
+# Bump the <version> inside the <parent> block, independent of child-element order
+# (the cherry-picked pom keeps its old parent version, which makes the reactor look
+# for keycloak-model-redis at the wrong version and fail the dist build).
+perl -0pi -e "s{(<parent>.*?<version>)[^<]+(</version>.*?</parent>)}{\${1}${TARGET}\${2}}s" model/redis/pom.xml
+if ! grep -q "<version>${TARGET}</version>" model/redis/pom.xml; then
+  echo "::ERROR:: failed to bump model/redis/pom.xml parent version to ${TARGET}"; exit 2
+fi
 git add model/redis/pom.xml
 git commit -q --amend --no-edit
 
