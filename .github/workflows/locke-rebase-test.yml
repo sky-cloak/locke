@@ -63,23 +63,29 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Ensure the label exists (idempotent) — gh issue create fails if it's missing.
+          # Ensure the label exists (idempotent).
           gh label create rebase-conflict --color B60205 \
             --description "Daily upstream rebase conflict" --force 2>/dev/null || true
-          # De-dupe: don't pile up a new issue every day while one is already open.
+          # De-dupe: don't pile up a new issue while one is already open.
           OPEN=$(gh issue list --label rebase-conflict --state open --json number --jq 'length')
           if [ "${OPEN:-0}" != "0" ]; then
             echo "An open rebase-conflict issue already exists; skipping."
             exit 0
           fi
-          BODY=$(cat /tmp/conflict.txt)
-          gh issue create \
-            --title "Rebase conflict against upstream Keycloak ($(date -u +%Y-%m-%d))" \
-            --label "rebase-conflict" \
-            --body "Automated daily rebase onto \`upstream/main\` failed.
-
-          \`\`\`
-          ${BODY}
-          \`\`\`
-
-          Resolve locally: \`git fetch upstream && git rebase upstream/main\`."
+          # Build the body in a file, then create the issue via the REST API.
+          # `gh issue create --label` resolves labels over GraphQL and returns a
+          # misleading "label not found" under the Actions GITHUB_TOKEN even when the
+          # label exists; the REST issues endpoint takes the label inline reliably.
+          {
+            echo "Automated daily rebase onto \`upstream/main\` failed."
+            echo ""
+            echo '```'
+            cat /tmp/conflict.txt
+            echo '```'
+            echo ""
+            echo "Resolve locally: \`git fetch upstream && git rebase upstream/main\`."
+          } > /tmp/issue-body.md
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/issues" \
+            -f title="Rebase conflict against upstream Keycloak ($(date -u +%Y-%m-%d))" \
+            -F body=@/tmp/issue-body.md \
+            -f 'labels[]=rebase-conflict' >/dev/null
