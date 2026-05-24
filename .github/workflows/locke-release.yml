@@ -59,6 +59,35 @@ jobs:
           docker push "$IMAGE:$TAG"
           docker push "$IMAGE:latest"
 
+      - name: Mirror image to Quay and Docker Hub
+        # Each registry is independent and skipped when its credentials are absent.
+        # Checks are on env vars (never secrets.* in a step-level if:) so the step always exists.
+        env:
+          QUAY_USER:       ${{ secrets.QUAY_USERNAME }}
+          QUAY_TOKEN:      ${{ secrets.QUAY_TOKEN }}
+          DOCKERHUB_USER:  ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          QUAY_IMAGE:      quay.io/skycloak/locke
+          DOCKERHUB_IMAGE: docker.io/skycloak/locke
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if [ -n "$QUAY_TOKEN" ]; then
+            echo "Mirroring to $QUAY_IMAGE"
+            echo "$QUAY_TOKEN" | docker login quay.io -u "$QUAY_USER" --password-stdin
+            docker tag "$IMAGE:$TAG" "$QUAY_IMAGE:$TAG";   docker push "$QUAY_IMAGE:$TAG"
+            docker tag "$IMAGE:$TAG" "$QUAY_IMAGE:latest"; docker push "$QUAY_IMAGE:latest"
+          else
+            echo "Quay credentials not set; skipping Quay."
+          fi
+          if [ -n "$DOCKERHUB_TOKEN" ]; then
+            echo "Mirroring to $DOCKERHUB_IMAGE"
+            echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USER" --password-stdin
+            docker tag "$IMAGE:$TAG" "$DOCKERHUB_IMAGE:$TAG";   docker push "$DOCKERHUB_IMAGE:$TAG"
+            docker tag "$IMAGE:$TAG" "$DOCKERHUB_IMAGE:latest"; docker push "$DOCKERHUB_IMAGE:latest"
+          else
+            echo "Docker Hub credentials not set; skipping Docker Hub."
+          fi
+
       - name: Generate release notes
         run: |
           {
