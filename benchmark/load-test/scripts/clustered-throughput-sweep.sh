@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# clustered-throughput-sweep.sh (SKYCF-426).
+# clustered-throughput-sweep.sh
 # Real 3-pod clustered throughput: A3 (Infinispan/JGroups) vs B3 (Redis pub/sub),
 # both behind one nginx least_conn LB. This is the config the single-instance
 # realm sweep could NOT measure: it makes Infinispan pay JGroups N×N + session

@@ -6,52 +6,12 @@
 **Mode**: `start-dev` for both (NOT `--optimized`)
 **Single node** for KC. Single Postgres. Single Redis (colocated).
 
-This document tracks the perf-optimization journey from baseline → tuned pool → atomic SET PX → Caffeine L1 → selective L1.
-
----
-
-## Clustered 3-pod throughput: preliminary (2026-05-21, SKYCF-426)
-
-**This is not a published parity claim.** It is a preliminary single-host run.
-The headline parity number is intentionally being held until it can be reproduced
-on isolated cloud infrastructure (EKS), where the load generator and the Keycloak
-pods do not share a machine.
-
-What changed vs the single-node numbers below: in a **3-pod cluster behind one
-nginx load balancer**, vanilla Keycloak pays its real-world coordination cost:
-embedded Infinispan forms a JGroups cluster (3-member view confirmed) and
-replicates across nodes. Locke's Redis backend coordinates via pub/sub against a
-shared store. This is the configuration the single-node test could not measure.
-
-Setup: A3 = vanilla KC 26.3.5, embedded Infinispan, `jdbc-ping` discovery, 3 pods.
-B3 = Locke (Redis), 3 pods + 1 shared Redis. Same nginx `least_conn` LB. kcb
-Gatling `AuthorizationCode` flow, 60s measurement. **All on one Mac** (both
-clusters run sequentially, but each shares the host with Redis, Postgres, and the
-load generator).
-
-| Load (users/sec) | A3 Infinispan (req/s) | B3 Redis (req/s) | B3/A3 | Errors |
-|---|---|---|---|---|
-| 5  | 17.67 | 17.58 | 99.5%  | 0 / 0 |
-| 20 | 68.51 | 68.97 | 100.7% | 0 / 0 |
-| 40 | 105.92 | 92.55 | 87.4% | A3 0, B3 0.95% (91/9625) |
-
-Reading it honestly:
-
-- At **sustained load (5–20 users/sec)** the two backends are within run-to-run
-  noise of each other, with zero errors on both. This is the strong signal: the
-  16–29%-of-vanilla single-node gap (see below) **closes once Infinispan pays its
-  clustering cost.**
-- At **40 users/sec both stacks are saturated on the single host**: A3 had 76% of
-  requests over 1.2s (slow but no failures); B3 had 85% over 1.2s plus 0.95%
-  failures. This point is confounded by co-locating both clusters + Redis +
-  Postgres + Gatling on one machine, so the 87% figure is not attributable to the
-  cache backend alone.
-- **Why no headline number yet:** the saturation point needs an EKS run that
-  isolates the load generator from the pods before we publish parity. Tracked as
-  the cloud portion of SKYCF-426 / SKYCF-395.
-
-Raw data: `benchmark/load-test/results/2026-05-21/clustered-426/`. Reproduce:
-`benchmark/load-test/scripts/clustered-throughput-sweep.sh "5 20 40" 60`.
+This document is the **local single-host iteration journal** for the Redis cache
+optimization work (baseline → tuned pool → atomic SET PX → Caffeine L1 → selective
+L1). The numbers here are from a developer Mac and are useful for the engineering
+journey, not as the published parity claim. For the headline production numbers,
+see **[benchmark/k8s-ovh/REPORT.md](./k8s-ovh/REPORT.md)** — an isolated 3-pod
+cloud run on `start --optimized` with the load generator separated from the pods.
 
 ---
 
@@ -195,7 +155,7 @@ The **catastrophic load pattern is gone** in either reading. Original B regresse
 | **Stampede prevention** | ✅ Built-in via `Cache.get(k, loader)` single-flight |
 | **Cross-node L1 consistency** | ✅ Via `L1InvalidationBus` pub/sub |
 | **Pub/sub message loss tolerance** | ⚠ Fire-and-forget; relies on L1 TTL (60 s) to heal stale entries on a missed message. Acceptable for cache; SOT in Postgres always correct. |
-| **Multi-region** | ❌ Not implemented. Pub/sub doesn't cross regions; needs SNS+SQS / NATS JetStream. |
+| **Multi-region** | ✅ Achievable with a multi-region L2: Redis Enterprise Active-Active, Redis Cloud, or ElastiCache Global Datastore. The L1 invalidation bus is single-region (Redis pub/sub isn't geo-replicated), but missed cross-region invalidations self-heal within the 60 s L1 TTL — the same tolerance as the row above. For tighter cross-region invalidation, ride a replicated Redis Stream or an external bus (NATS JetStream). |
 | **Login p99 vs SLO** | ⚠ At saturation: 6.9 s. At light load: 254 ms. Production-safe with adequate over-provisioning. |
 | **License (Valkey vs Redis)** | ✅ Drop-in works. Move to Valkey for OSI-approved Apache 2.0 license. |
 

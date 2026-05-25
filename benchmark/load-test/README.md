@@ -2,12 +2,6 @@
 
 Tests how Keycloak (with Infinispan) and Locke (with Redis) scale as the number of realms grows.
 
-Tracked in Jira:
-- **SKYCF-392** — this framework
-- **SKYCF-393** — the local-Docker sweep (1→1000 realms)
-- **SKYCF-394** — multi-IdP / federation complexity test
-- **SKYCF-395** — the production 10K-realm sweep on EKS
-
 ## Stacks tested
 
 | Stack | Cache | Pods | Redis mode | Port |
@@ -24,7 +18,7 @@ Tracked in Jira:
 - `10` — small
 - `100` — medium (Skycloak hosted typical customer = ~5-50 realms)
 - `1000` — large self-hosted
-- `10000` — enterprise/SaaS (deferred to EKS, SKYCF-395)
+- `10000` — enterprise/SaaS (deferred to a cloud/EKS run)
 
 ## Per-realm content (default)
 
@@ -109,14 +103,14 @@ benchmark/load-test/results/
 | 10 realms | ~30s | ~800MB | quick |
 | 100 realms | ~5 min | ~1.5-2GB | medium |
 | 1000 realms | ~60-90 min | 4-8GB+ | overnight |
-| 10000 realms | not feasible locally | est. 40GB+ | needs EKS (SKYCF-395) |
+| 10000 realms | not feasible locally | est. 40GB+ | needs a cloud/EKS run |
 
 ## Known limitations
 
 1. **Admin API rate limits** — Keycloak's admin REST has no global rate limit but contention on realm-create can cause 500s under high concurrency. Default `CONCURRENCY=8` is conservative.
 2. **Network bottleneck on Docker bridge** — at 1000 realms, the bench client and KC share the same Docker network. May saturate.
 3. **kcb scenario assumes a single realm** — current `AuthorizationCode` scenario uses one realm at a time. Future enhancement: randomize realm per virtual user.
-4. **Memory growth shape** — only point measurements at each scale, not continuous timeseries. For Prometheus continuous capture, see SKYCF-385.
+4. **Memory growth shape** — only point measurements at each scale, not continuous timeseries. For Prometheus continuous capture (planned).
 5. **Cold-start latency** — captured implicitly via kcb's first request. For dedicated cold-start measurement, do `docker restart <kc>` before kcb run (not in this framework yet).
 
 ## Interpreting results
@@ -137,4 +131,4 @@ All raw JSON results are committed to the repo under `benchmark/load-test/result
 - [ ] Add cross-stack comparison reporter (`report.py`)
 - [ ] Add per-virtual-user realm randomization to kcb scenario
 - [ ] Add Prometheus continuous capture variant
-- [ ] Add EKS Terraform module (SKYCF-395)
+- [ ] Add EKS Terraform module

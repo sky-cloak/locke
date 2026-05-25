@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# gen-bench-badge.sh (SKYCA-61).
+# gen-bench-badge.sh
 # Reads the newest clustered parity result and emits:
 #   benchmark/history/badge.json       (shields.io endpoint format, read by README)
 #   benchmark/history/<date>-<sha>.json (one historical data point)

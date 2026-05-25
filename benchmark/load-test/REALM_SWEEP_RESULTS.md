@@ -1,6 +1,6 @@
 # Progressive Realm Sweep — Definitive Results through 2000 Realms
 
-**Framework:** SKYCF-392 · **Run:** SKYCF-393 · keycloak-benchmark dataset provider · both stacks 8 GB heap / 8 GB container / 4 GB Postgres / INFO logs
+keycloak-benchmark dataset provider · both stacks 8 GB heap / 8 GB container / 4 GB Postgres / INFO logs
 
 ## TLDR (definitive run, 2026-05-16)
 
@@ -23,9 +23,9 @@ Clean run using the keycloak-benchmark **dataset provider** (server-side bulk cr
 
 ### Honest caveats
 
-- **SINGLE-INSTANCE ONLY (biggest limitation).** A and B were both 1 pod. In single instance, both Infinispan and Locke's L1 are just local memory, so the cache backend barely matters. The Infinispan-vs-Redis difference only appears under **clustering**, where the load balancer spreads requests across pods and the backends diverge: clustered Infinispan broadcasts invalidations over a JGroups N×N mesh and replicates session caches; Locke uses lightweight Redis pub/sub + shared Redis. **These single-instance numbers are not production-representative and likely understate the difference at cluster scale.** The decisive clustered run is SKYCF-426 (A3 3-pod vs B3 3-pod, needs EKS).
+- **SINGLE-INSTANCE ONLY (biggest limitation).** A and B were both 1 pod. In single instance, both Infinispan and Locke's L1 are just local memory, so the cache backend barely matters. The Infinispan-vs-Redis difference only appears under **clustering**, where the load balancer spreads requests across pods and the backends diverge: clustered Infinispan broadcasts invalidations over a JGroups N×N mesh and replicates session caches; Locke uses lightweight Redis pub/sub + shared Redis. **These single-instance numbers are not production-representative and likely understate the difference at cluster scale.** The decisive clustered run is the 3-pod A3-vs-B3 cloud run (needs EKS).
 - Heap is a single snapshot after a 20 s settle, not a GC-averaged figure. Per-realm "slope" is noisy (both land roughly 0.6-0.7 MB/realm averaged over 2000; do not quote a clean "4x gentler" — that was a 1000-point artifact).
-- This is **default-config caching** (vanilla realm cache unbounded, Locke L1 bounded at 10K). See the cache-bounding note; the apples-to-apples bounded-vs-bounded run is SKYCF-398.
+- This is **default-config caching** (vanilla realm cache unbounded, Locke L1 bounded at 10K). See the cache-bounding note; the apples-to-apples bounded-vs-bounded run is planned.
 - The strongest defensible claims: (1) flat external Redis regardless of realm count; (2) Locke consistently lighter on heap at scale; (3) provisioning slowdown is a shared Keycloak cost.
 
 ---
@@ -41,7 +41,7 @@ These results are **default config vs default config**. Verified in source (this
 - **Vanilla**: the `realms` / `users` / `authorization` *object* caches are **unbounded by default**. No `*_DEFAULT_MAX` constant; `CacheConfigurator.configureCacheMaxCount` only applies a cap if the operator sets `--cache-embedded-<name>-max-count`. Only the *revisions* caches are capped (realmRevisions 20000, userRevisions 100000, authorizationRevisions 20000; sessions 10000; keys/crl 1000). Source: `InfinispanConnectionProvider.java:42/46/57/58/66/70`, `CacheConfigurator.java:208`.
 - **Locke**: L1 (Caffeine) bounded at **10,000 entries + 60s TTL** by default, configurable via `l1MaxEntries`. Source: `L1RedisCache.java:271`, `DefaultRedisConnectionProviderFactory.java:105`.
 
-So the default-vs-default finding (vanilla grows with no plateau until OOM; Locke bounded) reflects real out-of-the-box behavior. A separate **bounded-vs-bounded** run is planned (**SKYCF-398**): cap vanilla with `--cache-embedded-realms-max-count=10000` so both evict at the same point, ideally at >10,000 realms so eviction actually triggers (needs EKS, SKYCF-395). That isolates the architectural difference (Infinispan invalidation+revision machinery + on-heap session/loginFailure caching) from the bound itself.
+So the default-vs-default finding (vanilla grows with no plateau until OOM; Locke bounded) reflects real out-of-the-box behavior. A separate **bounded-vs-bounded** run is planned: cap vanilla with `--cache-embedded-realms-max-count=10000` so both evict at the same point, ideally at >10,000 realms so eviction actually triggers (needs a cloud/EKS run). That isolates the architectural difference (Infinispan invalidation+revision machinery + on-heap session/loginFailure caching) from the bound itself.
 
 ## Setup
 
@@ -91,7 +91,7 @@ The memory measurements are point-in-time heap/Redis snapshots and are not affec
 - ✅ Memory curve validated through 500 realms, linear, Locke ~2.4x gentler
 - ⚠️ Provisioning-speed comparison invalid on this host; needs isolated re-run
 - ▶️ Next: 1000-realm run will push vanilla past its OOM point (expect vanilla failure/restart near ~580; Locke should survive). Run on an otherwise-idle machine for clean numbers.
-- ⏳ 10,000 realms requires cloud infra (SKYCF-395)
+- ⏳ 10,000 realms requires cloud infra
 
 ## Reproduce (use an idle machine for trustworthy provisioning numbers)
 

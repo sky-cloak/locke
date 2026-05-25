@@ -1,4 +1,4 @@
-# Locke clustered parity benchmark on OVH (SKYCF-426 / SKYCA-61).
+# Locke clustered parity benchmark on OVH.
 # Namespace + shared Postgres. Everything pins to the C3-64 "loading" pool.
 apiVersion: v1
 kind: Namespace
