@@ -26,5 +26,5 @@
       style="fill:#f5f1ea" aria-label="ocke"/>
   </g>
 
-  <text x="200" y="470" font-family="Manrope, system-ui, sans-serif" font-size="46" font-weight="500" fill="#a5a3e8" letter-spacing="0.5">Keycloak on Redis</text>
+  <text x="232" y="470" font-family="Manrope, system-ui, sans-serif" font-size="46" font-weight="500" fill="#a5a3e8" letter-spacing="0.5">Keycloak on Redis</text>
 </svg>
