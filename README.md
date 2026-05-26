@@ -53,12 +53,14 @@ docker compose -f docker-compose-redis.yml up
         Keycloak SPI dispatch  (Realm / User / Client / AuthSession / …)
                      │
                      ▼
-        Cache adapter layer  (model/redis)
-          ├─ L1: Caffeine, in-JVM (~100 ns), bounded 10k + 60s TTL
-          └─ L2: Redis / Valkey   (shared, cross-pod)
-                     │                     cross-pod invalidation
-                     ▼                     via Redis pub/sub (no JGroups)
-        PostgreSQL (source of truth)
+        Cache adapter layer  (model/redis)              no JGroups cluster
+          ├─ Local caches (realm / user / client / authz / keys):
+          │     L1 Caffeine in-JVM, DB on miss, invalidation over Redis pub/sub
+          └─ Distributed caches (auth sessions / login failures / single-use tokens):
+                stored in shared Redis / Valkey (cross-pod)
+                     │
+                     ▼
+        PostgreSQL (source of truth)   ·   user sessions persist to JPA
 ```
 
 `KC_CACHE=infinispan` swaps the adapter layer back to the upstream embedded
