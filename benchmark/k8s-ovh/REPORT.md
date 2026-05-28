@@ -109,11 +109,16 @@ Redis HA (Sentinel/Cluster) so there is no single-node outage. The same fixed im
 
 ## 6. Rolling version upgrade 26.3.5 → 26.6.1 under load
 
-- **Vanilla (Infinispan):** the rolling upgrade crosses an **incompatible Infinispan/JGroups
-  major (15 → 16)**. During the mixed-version window the cluster cannot form a unified view, and
-  in-flight + new login requests **hang indefinitely** (observed: the load generator stalled and
-  had to be force-terminated). The rollout completes (~84s) and service recovers only once all 3
-  pods are on 26.6.1. In practice this is a **cache-layer outage** for the duration of the upgrade.
+- **Vanilla (Infinispan), mixed-version rolling attempt:** the rolling upgrade crosses an
+  **incompatible Infinispan/JGroups major (15 → 16)**. During the mixed-version window the cluster
+  cannot form a unified view, and in-flight + new login requests **hang indefinitely** (observed:
+  the load generator stalled and had to be force-terminated). The rollout completes (~84s) and
+  service recovers only once all 3 pods are on 26.6.1. Important caveat: a mixed-version rolling
+  cluster across an incompatible Infinispan version is **not the operation upstream recommends**
+  for this scenario (it is documented as unsupported). The recommended Keycloak path here is a
+  brief planned restart (Keycloak starts in well under 10 seconds), which would land at roughly
+  that downtime instead of a stalled rollout. The 84s figure is therefore the cost of doing the
+  mixed-version rolling attempt, not a fair "no-Locke alternative" baseline.
 - **Locke (Redis): rolls cleanly under load — no outage.** Tested with properly-versioned Locke
   images (built from the real KC tags; `version.txt` = 26.3.5 / 26.6.1 / 26.6.2). Windowed load
   (50 ups), image flipped mid-stream, fresh DB so the old version owns the schema:
@@ -147,7 +152,7 @@ Windowed timeline (15s load windows): vanilla baseline clean → cutover window 
 **Finding:** adopting Locke at the same version **lands cleanly at parity**; the *live* cutover has
 a small, **bounded** disruption window driven by Infinispan's departure (not Locke). For a seamless
 switch, do the cutover in a brief maintenance window or drain pods one at a time. This is a far
-better outcome than the cross-version Infinispan *upgrade* (which is a full outage).
+better outcome than a mixed-version rolling attempt on Infinispan (which is not the recommended operation for crossing an Infinispan-version boundary anyway: see section 6).
 
 ## 8. Redis placement: embedded (colocated) vs external (cross-node)
 
@@ -176,8 +181,10 @@ is fine** — you don't need to colocate Redis with Keycloak for performance.
    moderate load; both stay <170ms p99 to 250 ups.
 3. **Resilience: the real win.** Losing a node costs Infinispan a ~31–40s rebalance stall; Locke
    shrugs it off (sub-second to low-seconds p99). This is the operability argument.
-4. **Upgrades:** Infinispan rolling upgrades across an incompatible JGroups version are an outage;
-   Locke removes that cluster-protocol version barrier (no JGroups).
+4. **Upgrades:** across an Infinispan-version boundary the recommended Keycloak path is a brief
+   planned restart (Keycloak starts in well under 10s); Locke can do that same upgrade as a
+   rolling update because there is no JGroups version handshake. Keycloak does not guarantee
+   no-downtime minor upgrades in general, so this is one fewer constraint, not a blanket promise.
 5. **Adopting Locke (same version):** lands cleanly at throughput parity; the live cutover has only
    a bounded ~60–75s blip (0.02% failures), driven by Infinispan's departure — best done in a short
    maintenance window.

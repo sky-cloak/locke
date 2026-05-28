@@ -102,8 +102,11 @@ backend delivers **~100% throughput parity** with embedded Infinispan (within ~0
 to 250 logins/sec, zero errors on both). The trade is a little read latency for a
 large resilience gain: when a node is lost, Infinispan stalls ~31-40s rebalancing
 (JGroups state transfer) while Locke keeps serving from Redis at sub-second p99.
-Cross-version upgrades roll under load too (no JGroups version barrier), whereas an
-Infinispan rolling upgrade across an incompatible version is an outage. Full
+On an upgrade that crosses an Infinispan-version boundary, Locke can roll the
+cluster as a rolling update (no JGroups version handshake to break), where the
+embedded path would otherwise want a brief planned restart (Keycloak starts in
+well under 10 seconds). Keycloak does not guarantee no-downtime minor upgrades
+in general, so this is one fewer constraint, not a blanket promise. Full
 methodology, per-operation latency, resilience, upgrade, and memory numbers are in
 [benchmark/k8s-ovh/REPORT.md](./benchmark/k8s-ovh/REPORT.md) (and
 [benchmark/RESULTS.md](./benchmark/RESULTS.md) for the local runs).

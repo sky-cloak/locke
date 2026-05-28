@@ -81,8 +81,13 @@ ElastiCache/MemoryDB, Azure Cache for Redis, GCP Memorystore.
   ~0.1% to 250 logins/sec, zero errors on both). It trades a little read latency
   (in-process Infinispan reads beat a Redis round trip) for a large resilience
   gain: when a node is lost, Infinispan stalls ~31-40s rebalancing while Locke
-  keeps serving from Redis with sub-second p99. Cross-version upgrades also roll
-  under load (no JGroups version barrier). Full methodology and numbers in
+  keeps serving from Redis with sub-second p99. On an upgrade that crosses an
+  Infinispan-version boundary, Locke can roll the cluster as a rolling update
+  because there is no JGroups version handshake to break, whereas the embedded
+  path would otherwise want a brief planned restart (Keycloak starts in well
+  under 10 seconds). Keycloak does not guarantee no-downtime minor upgrades in
+  general, so this is one fewer constraint, not a blanket promise. Full
+  methodology and numbers in
   [benchmark/k8s-ovh/REPORT.md](./benchmark/k8s-ovh/REPORT.md).
 
 ## What Locke is not
