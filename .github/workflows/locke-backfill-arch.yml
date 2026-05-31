@@ -38,7 +38,7 @@ jobs:
       TAGS: ${{ inputs.tags }}
       LATEST_TAG: ${{ inputs.latest_tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up QEMU (cross-arch emulation for arm64 build)
         uses: docker/setup-qemu-action@v3
