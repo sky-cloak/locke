@@ -29,6 +29,7 @@ import org.keycloak.crl.CrlStorageProvider;
 import org.keycloak.crl.CrlStorageProviderFactory;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
+import org.keycloak.provider.EnvironmentDependentProviderFactory;
 import org.keycloak.provider.ProviderConfigProperty;
 import org.keycloak.provider.ProviderConfigurationBuilder;
 
@@ -38,7 +39,7 @@ import org.infinispan.Cache;
  *
  * @author rmartinc
  */
-public class InfinispanCrlStorageProviderFactory implements CrlStorageProviderFactory, InfinispanCrlStorageProvider.SharedData {
+public class InfinispanCrlStorageProviderFactory implements CrlStorageProviderFactory, InfinispanCrlStorageProvider.SharedData, EnvironmentDependentProviderFactory {
 
     public static final String PROVIDER_ID = "infinispan";
 
@@ -106,6 +107,11 @@ public class InfinispanCrlStorageProviderFactory implements CrlStorageProviderFa
     @Override
     public String getId() {
         return PROVIDER_ID;
+    }
+
+    @Override
+    public boolean isSupported(Config.Scope config) {
+        return !"redis".equals(config.root().get("cache"));
     }
 
     private void lazyInit(KeycloakSession session) {

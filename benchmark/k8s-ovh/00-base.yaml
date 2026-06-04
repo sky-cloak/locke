@@ -1,0 +1,73 @@
+# Locke clustered parity benchmark on OVH.
+# Namespace + shared Postgres. Everything pins to the C3-64 "loading" pool.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: locke-bench
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: locke-bench
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: postgres } }
+  template:
+    metadata: { labels: { app: postgres } }
+    spec:
+      nodeSelector: { bench-role: infra }
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          args: ["postgres", "-c", "max_connections=500", "-c", "shared_buffers=512MB"]
+          env:
+            - { name: POSTGRES_DB, value: keycloak }
+            - { name: POSTGRES_USER, value: keycloak }
+            - { name: POSTGRES_PASSWORD, value: keycloak }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          ports: [ { containerPort: 5432 } ]
+          resources:
+            requests: { cpu: "500m", memory: 1Gi }
+            limits: { memory: 4Gi }
+          volumeMounts: [ { name: data, mountPath: /var/lib/postgresql/data } ]
+      volumes: [ { name: data, emptyDir: {} } ]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: locke-bench
+spec:
+  selector: { app: postgres }
+  ports: [ { port: 5432, targetPort: 5432 } ]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: locke-bench
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: redis } }
+  template:
+    metadata: { labels: { app: redis } }
+    spec:
+      nodeSelector: { bench-role: infra }
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          args: ["redis-server", "--save", "", "--appendonly", "no"]
+          ports: [ { containerPort: 6379 } ]
+          resources:
+            requests: { cpu: "500m", memory: 512Mi }
+            limits: { memory: 2Gi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: locke-bench
+spec:
+  selector: { app: redis }
+  ports: [ { port: 6379, targetPort: 6379 } ]

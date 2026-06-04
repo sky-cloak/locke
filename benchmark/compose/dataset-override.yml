@@ -1,0 +1,7 @@
+# Overlay that mounts the keycloak-benchmark dataset provider into the
+# keycloak service. Use with:  docker compose -f <stack>.yml -f dataset-override.yml up -d
+# start-dev auto-loads JARs from /opt/keycloak/providers/ on boot (no rebuild).
+services:
+  keycloak:
+    volumes:
+      - ../kcb/keycloak-benchmark-dataset-26.4.0-SNAPSHOT.jar:/opt/keycloak/providers/keycloak-benchmark-dataset.jar:ro

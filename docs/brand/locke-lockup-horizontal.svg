@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 160" fill="none">
+  <g transform="translate(20 20) scale(0.5)">
+    <defs>
+      <mask id="bore-h" maskUnits="userSpaceOnUse" x="0" y="0" width="240" height="240">
+        <rect width="240" height="240" fill="white"></rect>
+        <circle cx="94" cy="178" r="6" fill="black"></circle>
+      </mask>
+    </defs>
+    <g fill="#252272">
+      <g mask="url(#bore-h)">
+        <rect x="72" y="40" width="44" height="160" rx="22"></rect>
+        <rect x="72" y="156" width="130" height="44" rx="22"></rect>
+      </g>
+      <circle cx="94" cy="178" r="2.2"></circle>
+    </g>
+  </g>
+  <rect x="170" y="50" width="1" height="60" fill="#252272" fill-opacity="0.25"></rect>
+  <text x="200" y="118" font-family="Manrope, system-ui, sans-serif" font-weight="600" font-size="110" letter-spacing="-3.85" fill="#252272">locke</text>
+</svg>

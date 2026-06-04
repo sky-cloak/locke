@@ -57,6 +57,7 @@ import org.keycloak.common.Profile;
 import org.keycloak.common.crypto.FipsMode;
 import org.keycloak.common.util.MultiSiteUtils;
 import org.keycloak.common.util.StreamUtil;
+import org.keycloak.config.CachingOptions;
 import org.keycloak.config.DatabaseOptions;
 import org.keycloak.config.HealthOptions;
 import org.keycloak.config.HttpOptions;
@@ -816,6 +817,21 @@ class KeycloakProcessor {
         indexDependencyBuildItemBuildProducer.produce(new IndexDependencyBuildItem("org.keycloak", "keycloak-model-jpa"));
     }
 
+    /**
+     * Conditionally indexes Redis cache implementation when --cache=redis is specified.
+     * This enables Redis as a distributed caching backend alternative to Infinispan.
+     */
+    @BuildStep
+    @Consume(ConfigBuildItem.class)
+    void indexRedisCache(BuildProducer<IndexDependencyBuildItem> indexDependencyBuildItemBuildProducer) {
+        Optional<String> cacheType = getOptionalKcValue(CachingOptions.CACHE.getKey());
+
+        if (cacheType.isPresent() && cacheType.get().equals(CachingOptions.Mechanism.redis.name())) {
+            logger.infof("Redis cache mechanism detected, indexing keycloak-model-redis");
+            indexDependencyBuildItemBuildProducer.produce(new IndexDependencyBuildItem("org.keycloak", "keycloak-model-redis"));
+        }
+    }
+
     @BuildStep
     @Consume(ProfileBuildItem.class)
     void disableHealthCheckBean(BuildProducer<BuildTimeConditionBuildItem> removeBeans, CombinedIndexBuildItem index) {
@@ -829,8 +845,8 @@ class KeycloakProcessor {
             // disables the single check we provide which depends on metrics enabled.
             disableReadyHealthCheck(removeBeans, index);
         }
-        if (InfinispanUtils.isRemoteInfinispan()) {
-            // no cluster when the remote infinispan is used.
+        if (InfinispanUtils.isRemoteInfinispan() || isRedisCacheEnabled()) {
+            // no cluster health check when remote infinispan or redis cache is used.
             disableClusterHealthCheck(removeBeans, index);
         }
     }
@@ -1175,6 +1191,11 @@ class KeycloakProcessor {
 
     private static boolean isHealthDisabled() {
         return !Configuration.isTrue(HealthOptions.HEALTH_ENABLED);
+    }
+
+    private static boolean isRedisCacheEnabled() {
+        Optional<String> cacheType = getOptionalKcValue(CachingOptions.CACHE.getKey());
+        return cacheType.isPresent() && cacheType.get().equals(CachingOptions.Mechanism.redis.name());
     }
 
     static JdbcDataSourceBuildItem getDefaultDataSource(List<JdbcDataSourceBuildItem> jdbcDataSources) {

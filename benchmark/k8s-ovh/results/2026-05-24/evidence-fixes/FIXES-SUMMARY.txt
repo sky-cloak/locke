@@ -1,0 +1,20 @@
+LOCKE REDIS FIXES — VALIDATION (2026-05-24, image locke:26.6.2-2)
+================================================================
+#4 KC_CACHE_REDIS_URL under --optimized: FIXED + PROVEN
+  Deployed with ONLY KC_CACHE_REDIS_URL (no KC_SPI_CONNECTIONS_REDIS__DEFAULT__URL workaround).
+  Pods connected to the redis service ("Redis topology: node_602279"), not localhost. 3/3 ready.
+
+#3 Fail-fast on Redis outage: FIXED + PROVEN
+  Before (26.6.1): a Redis outage hung in-flight request threads for 40+ min (no client timeout).
+  After (26.6.2-2): KC logs show "RedisCommandTimeoutException: Command timed out after 2 second(s)"
+  -> requests fail fast at the 2s command timeout instead of hanging. The windowed test progressed
+  through all windows in ~5 min (vs an indefinite hang before).
+  Recovery: once Redis returns and Lettuce reconnects, full recovery — 127 rps, p99 74ms, 0 fail,
+  0 timeouts. (During the outage the cache path errors fast, as expected; for zero-downtime use Redis HA.)
+
+#7 Redis placement (embedded/colocated vs external/cross-node): NEGLIGIBLE
+  80 ups : ext 270 rps p99 81ms | colo 270 rps p99 75ms
+  160 ups: ext 541 rps p99 93ms | colo 540 rps p99 112ms
+  250 ups: both saturate (multi-second p99, run-to-run noise)
+  Throughput identical, p99 within ~6-20ms below saturation. L1 Caffeine absorbs reads, so a
+  managed/external Redis on the same network performs the same as colocated.

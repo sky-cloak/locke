@@ -1,0 +1,76 @@
+name: bench-c-redis-remote
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  # Redis with 5ms RTT injected via tc netem (simulates "remote" Redis ~ same-region managed)
+  # Requires NET_ADMIN cap. Latency applied to lo so all traffic in/out gets +5ms each way -> 10ms RTT.
+  redis:
+    image: redis:7-alpine
+    cap_add:
+      - NET_ADMIN
+    command:
+      - sh
+      - -c
+      - |
+        apk add --no-cache iproute2-tc >/dev/null 2>&1 || true
+        # Add 2.5ms each direction => ~5ms RTT (typical same-region managed cache)
+        tc qdisc add dev eth0 root netem delay 2.5ms 2>/dev/null || true
+        exec redis-server --save '' --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  keycloak:
+    image: localhost:5011/keycloak:999.0.0-redis-l1
+    command: ["start-dev", "--hostname-strict=false", "--import-realm"]
+    volumes:
+      - ../realm-bench.json:/opt/keycloak/data/import/realm-bench.json:ro
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KC_CACHE: redis
+      KC_CACHE_REDIS_URL: redis://redis:6379
+      KC_HTTP_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      JAVA_OPTS_APPEND: "-Xms512m -Xmx1500m"
+    ports:
+      - "18082:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/realms/master || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+          cpus: "2"
