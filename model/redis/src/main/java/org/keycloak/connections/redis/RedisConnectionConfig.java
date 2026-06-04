@@ -27,11 +27,14 @@ import java.util.List;
  * Parses connection URIs and holds all connection settings.
  *
  * Supported URI formats:
- * - Standalone: redis://host:port
- * - Sentinel: redis-sentinel://host1:port1,host2:port2?sentinelMasterId=master
- * - Cluster: redis-cluster://host1:port1,host2:port2,host3:port3
+ * - Standalone:        redis://host:port               (plaintext)
+ * - Standalone TLS:    rediss://host:port              (TLS)
+ * - Sentinel:          redis-sentinel://h1:p1,h2:p2?sentinelMasterId=master
+ * - Sentinel TLS:      rediss-sentinel://...
+ * - Cluster:           redis-cluster://h1:p1,h2:p2,h3:p3
+ * - Cluster TLS:       rediss-cluster://...
  *
- * @author Keycloak Redis Team
+ * Userinfo is parsed as {@code user:pass}; either half may be empty.
  */
 public class RedisConnectionConfig {
 
@@ -44,8 +47,19 @@ public class RedisConnectionConfig {
     private final Mode mode;
     private final List<HostPort> hosts;
     private final String sentinelMasterId;
+    private final String username;
+    // Stored as String for parity with how every layer below us (System.getenv,
+    // Quarkus config, URI userinfo decode) hands secrets to us. Switching to char[]
+    // here would not protect against the String pool because the secret is already
+    // interned upstream. Defense is the redaction contract in toRedactedString()
+    // plus the log-capture test in src/test/java.
     private final String password;
     private final int database;
+
+    // TLS settings (only meaningful when sslEnabled = true).
+    private final boolean sslEnabled;
+    private final String tlsCaFile;
+    private final boolean tlsVerifyHostname;
 
     // Connection pool settings
     private final int poolMinSize;
@@ -62,8 +76,12 @@ public class RedisConnectionConfig {
         this.mode = builder.mode;
         this.hosts = builder.hosts;
         this.sentinelMasterId = builder.sentinelMasterId;
+        this.username = builder.username;
         this.password = builder.password;
         this.database = builder.database;
+        this.sslEnabled = builder.sslEnabled;
+        this.tlsCaFile = builder.tlsCaFile;
+        this.tlsVerifyHostname = builder.tlsVerifyHostname;
         this.poolMinSize = builder.poolMinSize;
         this.poolMaxSize = builder.poolMaxSize;
         this.timeout = builder.timeout;
@@ -73,6 +91,10 @@ public class RedisConnectionConfig {
 
     /**
      * Parse a connection URI and create a configuration.
+     *
+     * <p>Schemes prefixed with {@code rediss} (note the second {@code s}) enable TLS
+     * on the resulting connection. All other settings (database, pool sizes, etc.) come
+     * from the builder, not the URI.</p>
      *
      * @param connectionUri Redis connection URI
      * @return configuration
@@ -90,15 +112,17 @@ public class RedisConnectionConfig {
         }
 
         Mode mode;
-        if (scheme.equals("redis")) {
-            mode = Mode.STANDALONE;
-        } else if (scheme.equals("redis-sentinel")) {
-            mode = Mode.SENTINEL;
-        } else if (scheme.equals("redis-cluster")) {
-            mode = Mode.CLUSTER;
-        } else {
-            throw new IllegalArgumentException("Unsupported scheme: " + scheme +
-                    ". Use redis://, redis-sentinel://, or redis-cluster://");
+        boolean ssl;
+        switch (scheme) {
+            case "redis":            mode = Mode.STANDALONE; ssl = false; break;
+            case "rediss":           mode = Mode.STANDALONE; ssl = true;  break;
+            case "redis-sentinel":   mode = Mode.SENTINEL;   ssl = false; break;
+            case "rediss-sentinel":  mode = Mode.SENTINEL;   ssl = true;  break;
+            case "redis-cluster":    mode = Mode.CLUSTER;    ssl = false; break;
+            case "rediss-cluster":   mode = Mode.CLUSTER;    ssl = true;  break;
+            default:
+                throw new IllegalArgumentException("Unsupported scheme: " + scheme +
+                        ". Use redis://, rediss://, redis-sentinel://, rediss-sentinel://, redis-cluster://, or rediss-cluster://");
         }
 
         // Parse hosts
@@ -116,12 +140,28 @@ public class RedisConnectionConfig {
             }
         }
 
-        // Parse authentication
+        // Parse authentication. Userinfo is `user:pass` or `:pass` (legacy AUTH).
+        // Either half may be empty; we keep null when absent to make the env-wins
+        // precedence in DefaultRedisConnectionProviderFactory easy to test.
+        String username = null;
         String password = null;
-        if (uri.getUserInfo() != null) {
-            String[] userInfo = uri.getUserInfo().split(":");
-            if (userInfo.length == 2) {
-                password = userInfo[1];
+        String userInfo = uri.getUserInfo();
+        if (userInfo != null && !userInfo.isEmpty()) {
+            int colon = userInfo.indexOf(':');
+            if (colon < 0) {
+                // Just a username (no password segment in the URL).
+                if (!userInfo.isEmpty()) {
+                    username = userInfo;
+                }
+            } else {
+                String u = userInfo.substring(0, colon);
+                String p = userInfo.substring(colon + 1);
+                if (!u.isEmpty()) {
+                    username = u;
+                }
+                if (!p.isEmpty()) {
+                    password = p;
+                }
             }
         }
 
@@ -129,7 +169,9 @@ public class RedisConnectionConfig {
                 .mode(mode)
                 .hosts(hosts)
                 .sentinelMasterId(sentinelMasterId)
+                .username(username)
                 .password(password)
+                .sslEnabled(ssl)
                 .build();
     }
 
@@ -180,12 +222,28 @@ public class RedisConnectionConfig {
         return sentinelMasterId;
     }
 
+    public String getUsername() {
+        return username;
+    }
+
     public String getPassword() {
         return password;
     }
 
     public int getDatabase() {
         return database;
+    }
+
+    public boolean isSslEnabled() {
+        return sslEnabled;
+    }
+
+    public String getTlsCaFile() {
+        return tlsCaFile;
+    }
+
+    public boolean isTlsVerifyHostname() {
+        return tlsVerifyHostname;
     }
 
     public int getPoolMinSize() {
@@ -206,6 +264,36 @@ public class RedisConnectionConfig {
 
     public Duration getRetryDelay() {
         return retryDelay;
+    }
+
+    /**
+     * Render this configuration with the password replaced by {@code ***}.
+     * Use this in every log statement that names this object.
+     */
+    public String toRedactedString() {
+        return "RedisConnectionConfig{" +
+                "mode=" + mode +
+                ", hosts=" + hosts +
+                ", sentinelMasterId=" + sentinelMasterId +
+                ", username=" + username +
+                ", password=" + (password == null ? null : "***") +
+                ", database=" + database +
+                ", sslEnabled=" + sslEnabled +
+                ", tlsCaFile=" + tlsCaFile +
+                ", tlsVerifyHostname=" + tlsVerifyHostname +
+                ", poolMinSize=" + poolMinSize +
+                ", poolMaxSize=" + poolMaxSize +
+                ", timeout=" + timeout +
+                ", retryAttempts=" + retryAttempts +
+                ", retryDelay=" + retryDelay +
+                '}';
+    }
+
+    @Override
+    public String toString() {
+        // toString() must never reveal a password. Delegate to the redacted form
+        // so that any accidental `%s` in a log statement is safe by construction.
+        return toRedactedString();
     }
 
     /**
@@ -241,8 +329,12 @@ public class RedisConnectionConfig {
         private Mode mode = Mode.STANDALONE;
         private List<HostPort> hosts = new ArrayList<>();
         private String sentinelMasterId;
+        private String username;
         private String password;
         private int database = 0;
+        private boolean sslEnabled = false;
+        private String tlsCaFile;
+        private boolean tlsVerifyHostname = true;
         private int poolMinSize = 16;
         private int poolMaxSize = 64;
         private Duration timeout = Duration.ofMillis(2000);
@@ -269,6 +361,11 @@ public class RedisConnectionConfig {
             return this;
         }
 
+        public Builder username(String username) {
+            this.username = username;
+            return this;
+        }
+
         public Builder password(String password) {
             this.password = password;
             return this;
@@ -276,6 +373,21 @@ public class RedisConnectionConfig {
 
         public Builder database(int database) {
             this.database = database;
+            return this;
+        }
+
+        public Builder sslEnabled(boolean sslEnabled) {
+            this.sslEnabled = sslEnabled;
+            return this;
+        }
+
+        public Builder tlsCaFile(String tlsCaFile) {
+            this.tlsCaFile = tlsCaFile;
+            return this;
+        }
+
+        public Builder tlsVerifyHostname(boolean tlsVerifyHostname) {
+            this.tlsVerifyHostname = tlsVerifyHostname;
             return this;
         }
 

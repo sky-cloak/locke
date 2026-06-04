@@ -79,9 +79,10 @@ public class DefaultRedisConnectionProviderFactory
 
             logger.info("Initializing Redis connection provider");
 
-            // Read configuration
+            // Read configuration. parse() handles the URL itself; env / sysprop / SPI overrides
+            // for username, password, and TLS settings are folded in below.
             String connectionUri = resolveConnectionUri();
-            RedisConnectionConfig redisConfig = RedisConnectionConfig.parse(connectionUri);
+            RedisConnectionConfig redisConfig = applyResolvedOverrides(RedisConnectionConfig.parse(connectionUri));
 
             // Create client manager
             this.clientManager = new RedisClientManager(redisConfig);
@@ -158,6 +159,101 @@ public class DefaultRedisConnectionProviderFactory
             return env;
         }
         return "redis://localhost:6379";
+    }
+
+    // The username/password/TLS resolvers mirror resolveConnectionUri()'s three-tier fallback:
+    // SPI scope (populated by the property mapper) -> system property -> env var. The same
+    // `--optimized` failure mode applies: without the env fallback, KC_CACHE_REDIS_* options
+    // are silently ignored under `start --optimized`.
+    // package-private for unit testing
+    String resolveUsername() {
+        return resolveString("username", "kc.cache-redis-username", "KC_CACHE_REDIS_USERNAME");
+    }
+
+    String resolvePassword() {
+        return resolveString("password", "kc.cache-redis-password", "KC_CACHE_REDIS_PASSWORD");
+    }
+
+    String resolveTlsCaFile() {
+        return resolveString("tls-ca-file", "kc.cache-redis-tls-ca-file", "KC_CACHE_REDIS_TLS_CA_FILE");
+    }
+
+    boolean resolveTlsVerifyHostname() {
+        String raw = resolveString("tls-verify-hostname", "kc.cache-redis-tls-verify-hostname", "KC_CACHE_REDIS_TLS_VERIFY_HOSTNAME");
+        return raw == null || Boolean.parseBoolean(raw);
+    }
+
+    private String resolveString(String spiKey, String sysProp, String envVar) {
+        String spi = config.get(spiKey);
+        if (spi != null && !spi.isBlank()) {
+            return spi;
+        }
+        String sys = System.getProperty(sysProp);
+        if (sys != null && !sys.isBlank()) {
+            return sys;
+        }
+        String env = System.getenv(envVar);
+        if (env != null && !env.isBlank()) {
+            return env;
+        }
+        return null;
+    }
+
+    /**
+     * Fold env / sysprop / SPI overrides into the URL-parsed config:
+     *
+     * <ul>
+     *   <li>Env vars win over URL userinfo for username and password (URLs leak in {@code ps},
+     *       heap dumps, error stacks, audit logs; env / secret mounts are the conventional
+     *       secrets surface). A single WARN line is emitted when both are set with different
+     *       values so the override is auditable.</li>
+     *   <li>If any TLS knob is set but the URL scheme is plain {@code redis://}, refuse to
+     *       start. Silently ignoring a TLS knob risks shipping a "TLS-enabled" connection
+     *       that is actually plaintext.</li>
+     * </ul>
+     */
+    // package-private for unit testing
+    RedisConnectionConfig applyResolvedOverrides(RedisConnectionConfig parsed) {
+        String envUsername = resolveUsername();
+        String envPassword = resolvePassword();
+        String tlsCaFile = resolveTlsCaFile();
+        boolean tlsVerifyHostname = resolveTlsVerifyHostname();
+
+        // TLS-knob / scheme consistency check. tlsVerifyHostname is true by default; treat the
+        // explicit `false` opt-out as a "user clearly set this" signal.
+        boolean explicitVerifyOff = !tlsVerifyHostname;
+        if ((tlsCaFile != null || explicitVerifyOff) && !parsed.isSslEnabled()) {
+            throw new RuntimeException(
+                    "KC_CACHE_REDIS_TLS_* options are set but the connection URL scheme is `redis://`, "
+                            + "not `rediss://`. Either change the scheme to `rediss://` or unset the TLS options.");
+        }
+
+        String effectiveUsername = parsed.getUsername();
+        if (envUsername != null) {
+            if (parsed.getUsername() != null && !parsed.getUsername().equals(envUsername)) {
+                logger.warn("KC_CACHE_REDIS_USERNAME env var overrides the username embedded in KC_CACHE_REDIS_URL");
+            }
+            effectiveUsername = envUsername;
+        }
+
+        String effectivePassword = parsed.getPassword();
+        if (envPassword != null) {
+            if (parsed.getPassword() != null && !parsed.getPassword().equals(envPassword)) {
+                logger.warn("KC_CACHE_REDIS_PASSWORD env var overrides the password embedded in KC_CACHE_REDIS_URL");
+            }
+            effectivePassword = envPassword;
+        }
+
+        return new RedisConnectionConfig.Builder()
+                .mode(parsed.getMode())
+                .hosts(parsed.getHosts())
+                .sentinelMasterId(parsed.getSentinelMasterId())
+                .username(effectiveUsername)
+                .password(effectivePassword)
+                .sslEnabled(parsed.isSslEnabled())
+                .tlsCaFile(tlsCaFile)
+                .tlsVerifyHostname(tlsVerifyHostname)
+                .build();
     }
 
     @Override

@@ -20,6 +20,8 @@ package org.keycloak.connections.redis;
 import io.lettuce.core.ClientOptions;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.RedisURI;
+import io.lettuce.core.SslOptions;
+import io.lettuce.core.SslVerifyMode;
 import io.lettuce.core.TimeoutOptions;
 import io.lettuce.core.cluster.ClusterClientOptions;
 import io.lettuce.core.cluster.RedisClusterClient;
@@ -30,6 +32,7 @@ import org.apache.commons.pool2.impl.GenericObjectPool;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.jboss.logging.Logger;
 
+import java.io.File;
 import java.time.Duration;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -88,9 +91,8 @@ public class RedisClientManager {
                 .withDatabase(config.getDatabase())
                 .withTimeout(config.getTimeout());
 
-        if (config.getPassword() != null) {
-            uriBuilder.withPassword(config.getPassword().toCharArray());
-        }
+        applyTls(uriBuilder);
+        applyAuth(uriBuilder);
 
         RedisURI redisURI = uriBuilder.build();
         this.standaloneClient = RedisClient.create(redisURI);
@@ -144,9 +146,8 @@ public class RedisClientManager {
             uriBuilder.withSentinel(uri.getHost(), uri.getPort());
         }
 
-        if (config.getPassword() != null) {
-            uriBuilder.withPassword(config.getPassword().toCharArray());
-        }
+        applyTls(uriBuilder);
+        applyAuth(uriBuilder);
 
         RedisURI redisURI = uriBuilder.build();
         this.standaloneClient = RedisClient.create(redisURI);
@@ -164,28 +165,72 @@ public class RedisClientManager {
                 .map(hostPort -> {
                     RedisURI.Builder builder = RedisURI.Builder.redis(hostPort.getHost(), hostPort.getPort())
                             .withTimeout(config.getTimeout());
-                    if (config.getPassword() != null) {
-                        builder.withPassword(config.getPassword().toCharArray());
-                    }
+                    applyTls(builder);
+                    applyAuth(builder);
                     return builder.build();
                 })
                 .collect(Collectors.toList());
 
         this.clusterClient = RedisClusterClient.create(clusterUris);
-        this.clusterClient.setOptions(ClusterClientOptions.builder()
+        ClusterClientOptions.Builder clusterOptions = ClusterClientOptions.builder()
                 .autoReconnect(true)
                 .disconnectedBehavior(ClientOptions.DisconnectedBehavior.REJECT_COMMANDS)
-                .timeoutOptions(TimeoutOptions.enabled(config.getTimeout()))
-                .build());
+                .timeoutOptions(TimeoutOptions.enabled(config.getTimeout()));
+        if (config.isSslEnabled()) {
+            clusterOptions.sslOptions(buildSslOptions());
+        }
+        this.clusterClient.setOptions(clusterOptions.build());
     }
 
     // See initStandaloneClient: fail fast on a Redis outage instead of hanging request threads.
     private ClientOptions buildClientOptions() {
-        return ClientOptions.builder()
+        ClientOptions.Builder builder = ClientOptions.builder()
                 .autoReconnect(true)
                 .disconnectedBehavior(ClientOptions.DisconnectedBehavior.REJECT_COMMANDS)
-                .timeoutOptions(TimeoutOptions.enabled(config.getTimeout()))
-                .build();
+                .timeoutOptions(TimeoutOptions.enabled(config.getTimeout()));
+        if (config.isSslEnabled()) {
+            builder.sslOptions(buildSslOptions());
+        }
+        return builder.build();
+    }
+
+    private void applyTls(RedisURI.Builder uriBuilder) {
+        if (!config.isSslEnabled()) {
+            return;
+        }
+        uriBuilder.withSsl(true);
+        // FULL: chain + CN/SAN match (default).
+        // CA: chain only; skip CN/SAN match. Used when the operator opts out of hostname
+        // verification (e.g. internal CA whose cert CN does not match the K8s service DNS).
+        // NONE is intentionally never used: a "TLS-enabled" connection that doesn't validate
+        // the cert chain at all is worse than plaintext because it pretends to be secure.
+        uriBuilder.withVerifyPeer(config.isTlsVerifyHostname() ? SslVerifyMode.FULL : SslVerifyMode.CA);
+    }
+
+    private void applyAuth(RedisURI.Builder uriBuilder) {
+        String password = config.getPassword();
+        if (password == null) {
+            return;
+        }
+        String username = config.getUsername();
+        if (username != null && !username.isEmpty()) {
+            uriBuilder.withAuthentication(username, password.toCharArray());
+        } else {
+            uriBuilder.withPassword(password.toCharArray());
+        }
+    }
+
+    private SslOptions buildSslOptions() {
+        SslOptions.Builder ssl = SslOptions.builder();
+        String tlsCaFile = config.getTlsCaFile();
+        if (tlsCaFile != null && !tlsCaFile.isEmpty()) {
+            File ca = new File(tlsCaFile);
+            if (!ca.canRead()) {
+                throw new RuntimeException("KC_CACHE_REDIS_TLS_CA_FILE points to a missing or unreadable file: " + tlsCaFile);
+            }
+            ssl.trustManager(ca);
+        }
+        return ssl.build();
     }
 
     /**

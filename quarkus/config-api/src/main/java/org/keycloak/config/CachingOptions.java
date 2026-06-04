@@ -198,10 +198,14 @@ public class CachingOptions {
     public static final String CACHE_REDIS_TIMEOUT_PROPERTY = CACHE_REDIS_PREFIX + "-timeout";
     public static final String CACHE_REDIS_MAX_POOL_SIZE_PROPERTY = CACHE_REDIS_PREFIX + "-max-pool-size";
     public static final String CACHE_REDIS_MIN_IDLE_PROPERTY = CACHE_REDIS_PREFIX + "-min-idle";
+    public static final String CACHE_REDIS_TLS_CA_FILE_PROPERTY = CACHE_REDIS_PREFIX + "-tls-ca-file";
+    public static final String CACHE_REDIS_TLS_VERIFY_HOSTNAME_PROPERTY = CACHE_REDIS_PREFIX + "-tls-verify-hostname";
 
     public static final Option<String> CACHE_REDIS_URL = new OptionBuilder<>(CACHE_REDIS_URL_PROPERTY, String.class)
             .category(OptionCategory.CACHE)
-            .description("The Redis connection URL. Format: redis://[username:password@]host:port[/database] or redis-sentinel://[username:password@]host1:port1,host2:port2[/database]?sentinelMasterId=masterId")
+            .description("The Redis connection URL. Format: redis[s]://[username:password@]host:port[/database], "
+                    + "redis[s]-sentinel://...?sentinelMasterId=masterId, or redis[s]-cluster://h1,h2,h3. "
+                    + "Use the `rediss` scheme (note the second `s`) to enable TLS.")
             .build();
 
     public static final Option<String> CACHE_REDIS_USERNAME = new OptionBuilder<>(CACHE_REDIS_USERNAME_PROPERTY, String.class)
@@ -236,6 +240,19 @@ public class CachingOptions {
             .category(OptionCategory.CACHE)
             .description("The minimum number of idle connections maintained in the Redis connection pool.")
             .defaultValue(8)
+            .build();
+
+    public static final Option<String> CACHE_REDIS_TLS_CA_FILE = new OptionBuilder<>(CACHE_REDIS_TLS_CA_FILE_PROPERTY, String.class)
+            .category(OptionCategory.CACHE)
+            .description("Path to a PEM file containing the certificate(s) of the CA that signed the Redis server certificate. "
+                    + "Only needed when the Redis server uses a private CA; managed Redis services with public CA chains do not need this.")
+            .build();
+
+    public static final Option<Boolean> CACHE_REDIS_TLS_VERIFY_HOSTNAME = new OptionBuilder<>(CACHE_REDIS_TLS_VERIFY_HOSTNAME_PROPERTY, Boolean.class)
+            .category(OptionCategory.CACHE)
+            .description("Whether to verify that the Redis server certificate's CN/SAN matches the connection hostname. "
+                    + "Enabled by default. Disable only as a temporary workaround for cert/DNS mismatches; the certificate chain is still validated.")
+            .defaultValue(Boolean.TRUE)
             .build();
 
     public static Option<Integer> maxCountOption(String cache) {

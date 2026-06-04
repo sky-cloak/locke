@@ -4,6 +4,9 @@
 **Last updated**: 2026-05-08 (after iteration 6)
 **Maintainer**: Skycloak (skycloak.io)
 
+> For TLS connections (`rediss://`), authentication, and managed-Redis configuration,
+> see the companion guide: [redis-security.md](./redis-security.md).
+
 ---
 
 ## Table of contents

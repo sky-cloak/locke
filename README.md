@@ -29,14 +29,25 @@ Both backends ship in the same binary. Choose with one environment variable.
 # Default: embedded Infinispan, identical to upstream Keycloak
 docker run --rm -p 8080:8080 \
   -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
-  ghcr.io/sky-cloak/locke:26.6.2-2 start-dev
+  ghcr.io/sky-cloak/locke:26.6.2-3 start-dev
 
 # Redis backend: point it at any Redis / Valkey / wire-compatible store
 docker run --rm -p 8080:8080 \
   -e KC_CACHE=redis -e KC_CACHE_REDIS_URL=redis://my-redis:6379 \
   -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
-  ghcr.io/sky-cloak/locke:26.6.2-2 start-dev
+  ghcr.io/sky-cloak/locke:26.6.2-3 start-dev
+
+# Managed Redis with TLS (AWS ElastiCache, Azure Cache, Upstash, Redis Cloud, ...)
+docker run --rm -p 8080:8080 \
+  -e KC_CACHE=redis \
+  -e KC_CACHE_REDIS_URL=rediss://my-redis.example.com:6380 \
+  -e KC_CACHE_REDIS_PASSWORD=$REDIS_PASSWORD \
+  -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
+  ghcr.io/sky-cloak/locke:26.6.2-3 start-dev
 ```
+
+For TLS + auth options (custom CA, hostname verification, env-var precedence), see
+[docs/redis-security.md](./docs/redis-security.md).
 
 Or with compose (Postgres + Redis + Locke):
 
@@ -75,12 +86,15 @@ Locke build 1." This is the Percona Server / Amazon Corretto convention.
 
 | Locke | Built from Keycloak | Status |
 |---|---|---|
-| `26.6.2-2` | 26.6.2 | current |
+| `26.6.2-3` | 26.6.2 | current |
+| `26.6.2-2` | 26.6.2 | superseded |
 | `26.6.1-2` | 26.6.1 | maintained |
 | `26.3.5-3` | 26.3.5 | maintained |
 
-The latest build on each line carries the Redis client fixes (bounded outage timeout
-and `KC_CACHE_REDIS_URL` honored under `--optimized`).
+The `-3` build adds TLS (`rediss://`) and honors `KC_CACHE_REDIS_PASSWORD` / `_USERNAME`
+at runtime; see [CHANGELOG.md](./CHANGELOG.md) and
+[docs/redis-security.md](./docs/redis-security.md). The 26.6.1 and 26.3.5 maintenance
+lines stay on plaintext for now; open an issue to request a backport.
 
 See [COMPATIBILITY.md](./COMPATIBILITY.md) for the full matrix and support window.
 
@@ -89,11 +103,15 @@ See [COMPATIBILITY.md](./COMPATIBILITY.md) for the full matrix and support windo
 | Option | Default | Purpose |
 |---|---|---|
 | `KC_CACHE` | `infinispan` | Cache backend: `infinispan` or `redis` |
-| `KC_CACHE_REDIS_URL` | (none) | Redis connection URL (required when `KC_CACHE=redis`) |
+| `KC_CACHE_REDIS_URL` | (none) | Redis connection URL. Use `rediss://` (note the second `s`) for TLS. |
+| `KC_CACHE_REDIS_USERNAME` | (none) | Redis ACL username. Optional. |
+| `KC_CACHE_REDIS_PASSWORD` | (none) | Redis password. Wins over URL-embedded userinfo when both are set. |
+| `KC_CACHE_REDIS_TLS_CA_FILE` | (none) | PEM file of CA(s) that signed the Redis server cert. Only needed for private CAs. |
+| `KC_CACHE_REDIS_TLS_VERIFY_HOSTNAME` | `true` | Verify the cert's CN/SAN matches the host. The chain is always validated. |
 
 Every other Keycloak option works exactly as upstream. Locke adds no new database,
 no new admin API, and no new operational concept beyond "you may point the cache at
-Redis."
+Redis." TLS + auth details: [docs/redis-security.md](./docs/redis-security.md).
 
 ## Performance
 

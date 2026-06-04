@@ -183,6 +183,16 @@ final class CachingPropertyMappers implements PropertyMapperGrouping {
                         .paramLabel("password")
                         .isMasked(true)
                         .build(),
+                fromOption(CachingOptions.CACHE_REDIS_TLS_CA_FILE)
+                        .isEnabled(CachingPropertyMappers::cacheSetToRedis, "cache is set to 'redis'")
+                        .to("kc.spi-connections-redis--default--tls-ca-file")
+                        .paramLabel("file")
+                        .build(),
+                fromOption(CachingOptions.CACHE_REDIS_TLS_VERIFY_HOSTNAME)
+                        .isEnabled(CachingPropertyMappers::cacheSetToRedis, "cache is set to 'redis'")
+                        .to("kc.spi-connections-redis--default--tls-verify-hostname")
+                        .paramLabel("true|false")
+                        .build(),
                 fromOption(CachingOptions.CACHE_REDIS_DATABASE)
                         .isEnabled(CachingPropertyMappers::cacheSetToRedis, "cache is set to 'redis'")
                         .to("kc.spi-connections-redis--default--database")

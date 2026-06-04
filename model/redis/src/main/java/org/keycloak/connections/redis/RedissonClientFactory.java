@@ -20,7 +20,18 @@ package org.keycloak.connections.redis;
 import org.jboss.logging.Logger;
 import org.redisson.Redisson;
 import org.redisson.api.RedissonClient;
+import org.redisson.config.BaseConfig;
 import org.redisson.config.Config;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.KeyStore;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateFactory;
 
 /**
  * Factory for creating Redisson client instances.
@@ -40,17 +51,19 @@ public class RedissonClientFactory {
      */
     public static RedissonClient createClient(RedisConnectionConfig config) {
         Config redissonConfig = new Config();
+        String scheme = config.isSslEnabled() ? "rediss://" : "redis://";
 
         switch (config.getMode()) {
             case STANDALONE:
                 // Get first host for standalone mode
                 String address = config.getHosts().isEmpty() ?
-                        "redis://localhost:6379" :
-                        "redis://" + config.getHosts().get(0).getHost() + ":" + config.getHosts().get(0).getPort();
+                        scheme + "localhost:6379" :
+                        scheme + config.getHosts().get(0).getHost() + ":" + config.getHosts().get(0).getPort();
 
-                redissonConfig.useSingleServer()
+                org.redisson.config.SingleServerConfig single = redissonConfig.useSingleServer()
                         .setAddress(address)
                         .setDatabase(config.getDatabase())
+                        .setUsername(config.getUsername())
                         .setPassword(config.getPassword())
                         .setConnectionPoolSize(config.getPoolMaxSize())
                         .setConnectionMinimumIdleSize(config.getPoolMinSize())
@@ -58,6 +71,7 @@ public class RedissonClientFactory {
                         .setConnectTimeout((int) config.getTimeout().toMillis())
                         .setRetryAttempts(config.getRetryAttempts())
                         .setRetryInterval((int) config.getRetryDelay().toMillis());
+                applySslConfig(single, config);
 
                 logger.infof("Creating Redisson client for standalone Redis: %s", address);
                 break;
@@ -66,9 +80,10 @@ public class RedissonClientFactory {
                 String masterName = config.getSentinelMasterId() != null ?
                         config.getSentinelMasterId() : "mymaster";
 
-                redissonConfig.useSentinelServers()
+                org.redisson.config.SentinelServersConfig sentinel = redissonConfig.useSentinelServers()
                         .setMasterName(masterName)
                         .setDatabase(config.getDatabase())
+                        .setUsername(config.getUsername())
                         .setPassword(config.getPassword())
                         .setMasterConnectionPoolSize(config.getPoolMaxSize())
                         .setMasterConnectionMinimumIdleSize(config.getPoolMinSize())
@@ -76,10 +91,11 @@ public class RedissonClientFactory {
                         .setConnectTimeout((int) config.getTimeout().toMillis())
                         .setRetryAttempts(config.getRetryAttempts())
                         .setRetryInterval((int) config.getRetryDelay().toMillis());
+                applySslConfig(sentinel, config);
 
                 // Add sentinel addresses
                 for (RedisConnectionConfig.HostPort host : config.getHosts()) {
-                    String sentinelAddress = "redis://" + host.getHost() + ":" + host.getPort();
+                    String sentinelAddress = scheme + host.getHost() + ":" + host.getPort();
                     redissonConfig.useSentinelServers().addSentinelAddress(sentinelAddress);
                 }
 
@@ -88,7 +104,8 @@ public class RedissonClientFactory {
                 break;
 
             case CLUSTER:
-                redissonConfig.useClusterServers()
+                org.redisson.config.ClusterServersConfig cluster = redissonConfig.useClusterServers()
+                        .setUsername(config.getUsername())
                         .setPassword(config.getPassword())
                         .setMasterConnectionPoolSize(config.getPoolMaxSize())
                         .setMasterConnectionMinimumIdleSize(config.getPoolMinSize())
@@ -96,10 +113,11 @@ public class RedissonClientFactory {
                         .setConnectTimeout((int) config.getTimeout().toMillis())
                         .setRetryAttempts(config.getRetryAttempts())
                         .setRetryInterval((int) config.getRetryDelay().toMillis());
+                applySslConfig(cluster, config);
 
                 // Add cluster nodes
                 for (RedisConnectionConfig.HostPort host : config.getHosts()) {
-                    String clusterAddress = "redis://" + host.getHost() + ":" + host.getPort();
+                    String clusterAddress = scheme + host.getHost() + ":" + host.getPort();
                     redissonConfig.useClusterServers().addNodeAddress(clusterAddress);
                 }
 
@@ -124,6 +142,63 @@ public class RedissonClientFactory {
             logger.errorf(e, "Failed to create Redisson client");
             throw new RuntimeException("Failed to create Redisson client", e);
         }
+    }
+
+    /**
+     * Apply TLS settings from a {@link RedisConnectionConfig} to a Redisson per-mode
+     * config (single, sentinel, cluster: they all extend {@link BaseConfig}, which
+     * is where the SSL knobs live).
+     *
+     * <p>Redisson's SSL APIs accept a JKS truststore via {@code setSslTruststore(URL)}
+     * but do not accept a raw PEM file. To honor {@code KC_CACHE_REDIS_TLS_CA_FILE},
+     * we load the PEM and write a one-shot in-memory truststore to a temp file, then
+     * point Redisson at that.</p>
+     */
+    // package-private for unit testing
+    static void applySslConfig(BaseConfig<?> cfg, RedisConnectionConfig config) {
+        if (!config.isSslEnabled()) {
+            return;
+        }
+        cfg.setSslEnableEndpointIdentification(config.isTlsVerifyHostname());
+        if (config.getTlsCaFile() != null && !config.getTlsCaFile().isEmpty()) {
+            try {
+                cfg.setSslTruststore(pemToTruststore(config.getTlsCaFile()));
+                // The password is required by KeyStore.load(...) but the truststore is
+                // public; we use a fixed value rather than a generated one so the temp
+                // file is fully reproducible from the inputs.
+                cfg.setSslTruststorePassword("changeit");
+            } catch (RuntimeException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load CA from " + config.getTlsCaFile(), e);
+            }
+        }
+    }
+
+    // package-private for unit testing
+    static URL pemToTruststore(String caPath) throws Exception {
+        File pem = new File(caPath);
+        if (!pem.canRead()) {
+            throw new RuntimeException("KC_CACHE_REDIS_TLS_CA_FILE points to a missing or unreadable file: " + caPath);
+        }
+        KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+        ks.load(null, null);
+        CertificateFactory cf = CertificateFactory.getInstance("X.509");
+        int i = 0;
+        try (FileInputStream in = new FileInputStream(pem)) {
+            for (Certificate c : cf.generateCertificates(in)) {
+                ks.setCertificateEntry("locke-ca-" + (i++), c);
+            }
+        }
+        if (i == 0) {
+            throw new RuntimeException("No certificates found in " + caPath);
+        }
+        Path tmp = Files.createTempFile("locke-redis-truststore", ".jks");
+        tmp.toFile().deleteOnExit();
+        try (FileOutputStream out = new FileOutputStream(tmp.toFile())) {
+            ks.store(out, "changeit".toCharArray());
+        }
+        return tmp.toUri().toURL();
     }
 
     /**
