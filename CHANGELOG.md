@@ -8,6 +8,14 @@ the Percona Server / Amazon Corretto convention.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [26.6.3-1] - 2026-06-04
+
+### Changed
+- Rebased Locke onto Keycloak 26.6.3 (upstream released 2026-06-04). No Locke-side
+  functional changes: the Redis cache backend, TLS support (`rediss://`), and runtime
+  `KC_CACHE_REDIS_PASSWORD` / `_USERNAME` handling are unchanged from `26.6.2-3`. See the
+  upstream [Keycloak 26.6.3 release notes](https://github.com/keycloak/keycloak/releases/tag/26.6.3).
+
 ## [26.6.2-3] - 2026-06-03
 
 ### Security
