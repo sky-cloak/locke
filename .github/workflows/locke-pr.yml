@@ -35,10 +35,15 @@ jobs:
         run: |
           ./mvnw -pl quarkus/dist -am -B -DskipTests install
           cp quarkus/dist/target/keycloak-*.tar.gz benchmark/
-          # local image tag the bench compose expects
-          docker build -f quarkus/container/Dockerfile \
-            --build-arg KEYCLOAK_DIST="$(ls quarkus/dist/target/keycloak-*.tar.gz)" \
-            -t localhost:5011/keycloak:999.0.0-redis-iter7 .
+          # The Dockerfile references `ubi-null.sh` relative to its own dir, so the
+          # build context must be `quarkus/container/`, not the repo root. Stage the
+          # tarball into the same dir and pass its basename to the build-arg. Mirrors
+          # the pattern in locke-release.yml.
+          cp quarkus/dist/target/keycloak-*.tar.gz quarkus/container/
+          DIST_FILE="$(basename "$(ls quarkus/dist/target/keycloak-*.tar.gz)")"
+          docker build quarkus/container \
+            --build-arg KEYCLOAK_DIST="$DIST_FILE" \
+            -t localhost:5011/keycloak:999.0.0-redis-iter7
 
       - name: Run clustered parity sweep (short)
         run: |
