@@ -58,6 +58,16 @@ if ! grep -q "<version>${TARGET}</version>" model/redis/pom.xml; then
   echo "::ERROR:: failed to bump model/redis/pom.xml parent version to ${TARGET}"; exit 2
 fi
 git add model/redis/pom.xml
+
+# Locke never runs Dependabot. As a distribution that tracks upstream Keycloak, it
+# inherits dependency versions through this rebase, not through independent bumps.
+# Upstream ships a .github/dependabot.yml; strip it on every rebase so the fork never
+# reopens scheduled version-bump PRs (which would diverge Locke from upstream).
+if [ -f .github/dependabot.yml ]; then
+  log "removing inherited upstream .github/dependabot.yml (Locke does not auto-bump deps)"
+  git rm -q --ignore-unmatch .github/dependabot.yml >/dev/null 2>&1 || rm -f .github/dependabot.yml
+fi
+
 git commit -q --amend --no-edit
 
 log "compiling model/redis against ${TARGET}"
