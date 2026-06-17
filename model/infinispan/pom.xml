@@ -122,6 +122,12 @@
                     </execution>
                 </executions>
                 <configuration combine.self="append">
+                    <!-- Locke: skip the network-dependent proto schema compatibility check.
+                         Upstream's remoteLockFiles point at release branches that 404 once
+                         archived (e.g. release/26.2), so this dev-time guard breaks any -am
+                         build. Locke builds from pre-validated upstream tags and never changes
+                         the Infinispan protos, so skipping it here is safe. -->
+                    <skip>true</skip>
                     <remoteLockFiles>https://raw.githubusercontent.com/keycloak/keycloak/refs/heads/archive/release/26.0/model/infinispan/proto.lock,https://raw.githubusercontent.com/keycloak/keycloak/refs/heads/archive/release/26.1/model/infinispan/proto.lock,https://raw.githubusercontent.com/keycloak/keycloak/refs/heads/release/26.2/model/infinispan/proto.lock,https://raw.githubusercontent.com/keycloak/keycloak/refs/heads/archive/release/26.3/model/infinispan/proto.lock,https://raw.githubusercontent.com/keycloak/keycloak/refs/heads/release/26.4/model/infinispan/proto.lock</remoteLockFiles>
                 </configuration>
             </plugin>
