@@ -12,8 +12,7 @@
 package org.keycloak.cache.redis;
 
 import io.lettuce.core.ScriptOutputType;
-import io.lettuce.core.api.StatefulRedisConnection;
-import io.lettuce.core.api.sync.RedisCommands;
+import io.lettuce.core.cluster.api.sync.RedisClusterCommands;
 import org.jboss.logging.Logger;
 import org.keycloak.connections.redis.RedisClientManager;
 
@@ -27,7 +26,7 @@ import java.nio.charset.StandardCharsets;
  * {@code EVAL}) and subsequently invoked via {@code EVALSHA <sha>} which sends
  * only the script hash, not the body. If the server has restarted and forgotten
  * the script, Lettuce auto-falls back to {@code EVAL} (this is built into
- * {@link RedisCommands#evalsha} via the {@code NOSCRIPT} retry).
+ * {@code evalsha} via the {@code NOSCRIPT} retry).
  *
  * <p>Why these scripts:
  * <ul>
@@ -191,12 +190,10 @@ public final class LuaScripts {
         return s.getBytes(StandardCharsets.UTF_8);
     }
 
-    @SuppressWarnings("unchecked")
-    private <R> R withConnection(java.util.function.Function<RedisCommands<byte[], byte[]>, R> action) {
-        StatefulRedisConnection<byte[], byte[]> connection =
-                (StatefulRedisConnection<byte[], byte[]>) clientManager.getConnection();
+    private <R> R withConnection(java.util.function.Function<RedisClusterCommands<byte[], byte[]>, R> action) {
+        Object connection = clientManager.getConnection();
         try {
-            return action.apply(connection.sync());
+            return action.apply(clientManager.sync(connection));
         } finally {
             clientManager.returnConnection(connection);
         }

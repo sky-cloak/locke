@@ -99,17 +99,23 @@ public class DefaultRedisConnectionProviderFactory
 
             logger.infof("Redis topology: %s", topologyInfo);
 
-            // Initialize the L1 cache invalidation bus (skip in cluster mode for now —
-            // cluster pub/sub requires per-shard subscriptions). Bus is null-safe in
-            // DefaultRedisConnectionProvider so the L1 layer is bypassed if absent.
+            // L1 invalidation bus: standalone/sentinel via the Lettuce client, cluster via the
+            // cluster client (classic cluster-wide pub/sub). Null-safe downstream if absent.
             L1RedisCache.L1Config l1Config = new L1RedisCache.L1Config(
                     config.getInt("l1MaxEntries", 10_000),
                     Duration.ofSeconds(config.getInt("l1TtlSeconds", 60))
             );
+            // Metrics first: the L1 bus records invalidation counters through it.
+            this.metrics = new RedisMetrics();
+
             boolean l1Enabled = config.getBoolean("l1Enabled", true);
             if (l1Enabled && clientManager.getStandaloneClient() != null) {
-                this.l1Bus = new L1InvalidationBus(clientManager.getStandaloneClient());
+                this.l1Bus = new L1InvalidationBus(clientManager.getStandaloneClient(), metrics);
                 logger.infof("L1 cache enabled (max=%d entries, ttl=%s)",
+                        l1Config.maxEntries, l1Config.ttl);
+            } else if (l1Enabled && clientManager.getClusterClient() != null) {
+                this.l1Bus = new L1InvalidationBus(clientManager.getClusterClient(), metrics);
+                logger.infof("L1 cache enabled in cluster mode (max=%d entries, ttl=%s)",
                         l1Config.maxEntries, l1Config.ttl);
             } else {
                 this.l1Bus = null;
@@ -117,7 +123,6 @@ public class DefaultRedisConnectionProviderFactory
             }
 
             // Tier 2 infra: Lua scripts (preloaded into Redis script cache) and pipeline factory.
-            this.metrics = new RedisMetrics();
             this.luaScripts = new LuaScripts(clientManager, metrics);
             try {
                 luaScripts.loadAll();
@@ -183,6 +188,25 @@ public class DefaultRedisConnectionProviderFactory
         return raw == null || Boolean.parseBoolean(raw);
     }
 
+    // Redis command timeout (also the fail-fast window when Redis is unreachable). Returns null
+    // when unset so the caller keeps the parsed default; a non-numeric or non-positive value fails
+    // fast at boot rather than silently reverting to the default.
+    Integer resolveTimeoutMillis() {
+        String raw = resolveString("timeout", "kc.cache-redis-timeout", "KC_CACHE_REDIS_TIMEOUT");
+        if (raw == null) {
+            return null;
+        }
+        try {
+            int ms = Integer.parseInt(raw.trim());
+            if (ms <= 0) {
+                throw new NumberFormatException("must be > 0");
+            }
+            return ms;
+        } catch (NumberFormatException e) {
+            throw new RuntimeException("KC_CACHE_REDIS_TIMEOUT must be a positive integer (milliseconds), got: " + raw, e);
+        }
+    }
+
     private String resolveString(String spiKey, String sysProp, String envVar) {
         String spi = config.get(spiKey);
         if (spi != null && !spi.isBlank()) {
@@ -218,6 +242,7 @@ public class DefaultRedisConnectionProviderFactory
         String envPassword = resolvePassword();
         String tlsCaFile = resolveTlsCaFile();
         boolean tlsVerifyHostname = resolveTlsVerifyHostname();
+        Integer timeoutMillis = resolveTimeoutMillis();
 
         // TLS-knob / scheme consistency check. tlsVerifyHostname is true by default; treat the
         // explicit `false` opt-out as a "user clearly set this" signal.
@@ -253,6 +278,7 @@ public class DefaultRedisConnectionProviderFactory
                 .sslEnabled(parsed.isSslEnabled())
                 .tlsCaFile(tlsCaFile)
                 .tlsVerifyHostname(tlsVerifyHostname)
+                .timeout(timeoutMillis != null ? Duration.ofMillis(timeoutMillis) : parsed.getTimeout())
                 .build();
     }
 

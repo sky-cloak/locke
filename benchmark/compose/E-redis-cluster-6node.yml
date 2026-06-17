@@ -1,0 +1,71 @@
+name: bench-e-redis-cluster
+# Redis Cluster: 6 nodes (3 primaries + 3 replicas), cluster-init builds it, plus Locke on
+# redis-cluster://. Failover test: `docker kill` a primary; the cluster promotes its replica
+# and Locke's topology refresh (30s periodic + adaptive) re-routes. node-timeout is low for
+# fast tests. All nodes share the compose network so the announced node IPs are reachable.
+
+x-node: &node
+  image: redis:7-alpine
+  command: ["redis-server", "--cluster-enabled", "yes", "--cluster-node-timeout", "5000",
+            "--save", "", "--appendonly", "no"]
+  healthcheck:
+    test: ["CMD", "redis-cli", "ping"]
+    interval: 3s
+    timeout: 3s
+    retries: 20
+
+services:
+  redis-node-1: {<<: *node}
+  redis-node-2: {<<: *node}
+  redis-node-3: {<<: *node}
+  redis-node-4: {<<: *node}
+  redis-node-5: {<<: *node}
+  redis-node-6: {<<: *node}
+
+  cluster-init:
+    image: redis:7-alpine
+    command: >
+      sh -c 'redis-cli --cluster create
+      redis-node-1:6379 redis-node-2:6379 redis-node-3:6379
+      redis-node-4:6379 redis-node-5:6379 redis-node-6:6379
+      --cluster-replicas 1 --cluster-yes'
+    depends_on:
+      redis-node-1: {condition: service_healthy}
+      redis-node-2: {condition: service_healthy}
+      redis-node-3: {condition: service_healthy}
+      redis-node-4: {condition: service_healthy}
+      redis-node-5: {condition: service_healthy}
+      redis-node-6: {condition: service_healthy}
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  keycloak:
+    image: localhost:5011/keycloak:999.0.0-redis   # locally-built dev image
+    command: ["start-dev", "--hostname-strict=false"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KC_CACHE: redis
+      KC_CACHE_REDIS_URL: "redis-cluster://redis-node-1:6379,redis-node-2:6379,redis-node-3:6379"
+      KC_HTTP_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports:
+      - "18087:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      cluster-init:
+        condition: service_completed_successfully

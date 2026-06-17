@@ -11,8 +11,7 @@
 
 package org.keycloak.cache.redis;
 
-import io.lettuce.core.api.StatefulRedisConnection;
-import io.lettuce.core.api.async.RedisAsyncCommands;
+import io.lettuce.core.cluster.api.async.RedisClusterAsyncCommands;
 import io.lettuce.core.RedisFuture;
 import org.jboss.logging.Logger;
 import org.keycloak.connections.redis.RedisClientManager;
@@ -73,15 +72,14 @@ public final class PipelinedRedisCache {
 
     public final class Batch implements AutoCloseable {
 
-        private final StatefulRedisConnection<byte[], byte[]> connection;
-        private final RedisAsyncCommands<byte[], byte[]> async;
+        private final Object connection;
+        private final RedisClusterAsyncCommands<byte[], byte[]> async;
         private final List<RedisFuture<?>> pending = new ArrayList<>(16);
         private boolean closed = false;
 
-        @SuppressWarnings("unchecked")
         Batch() {
-            this.connection = (StatefulRedisConnection<byte[], byte[]>) clientManager.getConnection();
-            this.async = connection.async();
+            this.connection = clientManager.getConnection();
+            this.async = clientManager.async(connection);
         }
 
         /** Queue a {@code SET key value PX ms}. Returns immediately. */

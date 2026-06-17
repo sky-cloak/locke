@@ -12,6 +12,10 @@
 package org.keycloak.cache.redis;
 
 import io.lettuce.core.RedisClient;
+import io.lettuce.core.cluster.RedisClusterClient;
+import io.lettuce.core.cluster.models.partitions.RedisClusterNode;
+import io.lettuce.core.cluster.pubsub.RedisClusterPubSubAdapter;
+import io.lettuce.core.cluster.pubsub.StatefulRedisClusterPubSubConnection;
 import io.lettuce.core.pubsub.RedisPubSubAdapter;
 import io.lettuce.core.pubsub.StatefulRedisPubSubConnection;
 import org.jboss.logging.Logger;
@@ -19,29 +23,19 @@ import org.jboss.logging.Logger;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
- * Cross-node L1 cache invalidation channel.
+ * Cross-node L1 invalidation over the {@code kc:l1:invalidate} Redis channel: a node that
+ * mutates a cache entry publishes the key, other nodes evict it from their local Caffeine
+ * L1. Self-messages are filtered by node id. Works in standalone, sentinel, and cluster
+ * modes (cluster uses classic cluster-wide PUBLISH).
  *
- * <p>When a node mutates a cache entry it publishes a message to the
- * {@code kc:l1:invalidate} Redis channel. Other nodes subscribe and evict the
- * corresponding key from their local Caffeine L1 cache.
- *
- * <p>Self-published messages are filtered out by node-id so a writer doesn't
- * evict its own freshly-written value.
- *
- * <p>Message format: {@code <nodeId>|<cacheName>|<l1Key>}
- *
- * <p>Limitations:
- * <ul>
- *   <li>Redis pub/sub is fire-and-forget. A node that reconnects after a
- *       network partition will not see invalidations published while it was
- *       offline; entries become stale until the L1 TTL expires. For stronger
- *       semantics, a future iteration could replay missed events from a
- *       TTL'd Redis stream, or substitute NATS JetStream.</li>
- *   <li>The wildcard channel {@code <name>:*} forces a full cache flush.</li>
- * </ul>
+ * <p>Pub/sub is fire-and-forget, so a node that loses its connection misses invalidations
+ * published during the gap. On reconnect (re-subscription) the bus flushes its local L1
+ * rather than trust possibly-stale entries. Message format
+ * {@code <nodeId>|<cacheName>|<l1Key>}; {@code l1Key == "*"} flushes that cache.
  */
 public final class L1InvalidationBus {
 
@@ -53,61 +47,120 @@ public final class L1InvalidationBus {
 
     private final String nodeId = UUID.randomUUID().toString();
     private final ConcurrentHashMap<String, Consumer<String>> handlers = new ConcurrentHashMap<>();
-    private final StatefulRedisPubSubConnection<byte[], byte[]> subConn;
-    private final StatefulRedisPubSubConnection<byte[], byte[]> pubConn;
+    private final AutoCloseable subConn;
+    private final AutoCloseable pubConn;
+    private final BiConsumer<byte[], byte[]> publisher;
+    private final RedisMetrics metrics;
+    private volatile boolean subscribedOnce = false;
     private volatile boolean closed = false;
 
-    public L1InvalidationBus(RedisClient client) {
-        this.subConn = client.connectPubSub(new ByteArrayCodec());
-        this.pubConn = client.connectPubSub(new ByteArrayCodec());
-
-        subConn.addListener(new RedisPubSubAdapter<byte[], byte[]>() {
-            @Override
-            public void message(byte[] channel, byte[] message) {
-                if (closed) return;
-                handleIncoming(new String(message, StandardCharsets.UTF_8));
+    /** Standalone / sentinel: a single Lettuce client whose pub/sub reaches the (promoted) primary. */
+    public L1InvalidationBus(RedisClient client, RedisMetrics metrics) {
+        this.metrics = metrics;
+        StatefulRedisPubSubConnection<byte[], byte[]> sub = client.connectPubSub(new ByteArrayCodec());
+        StatefulRedisPubSubConnection<byte[], byte[]> pub = client.connectPubSub(new ByteArrayCodec());
+        this.subConn = sub;
+        this.pubConn = pub;
+        this.publisher = (channel, message) -> pub.async().publish(channel, message);
+        sub.addListener(new RedisPubSubAdapter<byte[], byte[]>() {
+            @Override public void message(byte[] channel, byte[] message) {
+                if (!closed) handleIncoming(new String(message, StandardCharsets.UTF_8));
+            }
+            @Override public void subscribed(byte[] channel, long count) {
+                onSubscribed();
             }
         });
-        subConn.sync().subscribe(CHANNEL_BYTES);
-        logger.infof("L1 invalidation bus started; nodeId=%s channel=%s", nodeId, CHANNEL);
+        sub.sync().subscribe(CHANNEL_BYTES);
+        logger.infof("L1 invalidation bus started (standalone/sentinel); nodeId=%s channel=%s", nodeId, CHANNEL);
     }
 
-    /** Internal ctor for the no-op factory (no Redis connection). */
+    /** Cluster: classic PUBLISH propagates cluster-wide, so one subscription receives every node's messages. */
+    public L1InvalidationBus(RedisClusterClient client, RedisMetrics metrics) {
+        this.metrics = metrics;
+        StatefulRedisClusterPubSubConnection<byte[], byte[]> sub = client.connectPubSub(new ByteArrayCodec());
+        StatefulRedisClusterPubSubConnection<byte[], byte[]> pub = client.connectPubSub(new ByteArrayCodec());
+        sub.setNodeMessagePropagation(true);
+        this.subConn = sub;
+        this.pubConn = pub;
+        this.publisher = (channel, message) -> pub.async().publish(channel, message);
+        sub.addListener(new RedisClusterPubSubAdapter<byte[], byte[]>() {
+            @Override public void message(RedisClusterNode node, byte[] channel, byte[] message) {
+                if (!closed) handleIncoming(new String(message, StandardCharsets.UTF_8));
+            }
+            @Override public void subscribed(RedisClusterNode node, byte[] channel, long count) {
+                onSubscribed();
+            }
+        });
+        sub.sync().subscribe(CHANNEL_BYTES);
+        logger.infof("L1 invalidation bus started (cluster); nodeId=%s channel=%s", nodeId, CHANNEL);
+    }
+
+    /** No-op (single-node / tests): publish is discarded, nothing is subscribed. */
     private L1InvalidationBus() {
         this.subConn = null;
         this.pubConn = null;
+        this.publisher = null;
+        this.metrics = null;
         this.closed = true;
     }
 
-    /**
-     * Build a no-op bus for use in single-node deployments or unit tests where
-     * cross-node invalidation isn't needed. {@link #register} returns a no-op
-     * subscription and {@link #publish} silently discards. Local cache writes
-     * still work; only cross-node propagation is disabled.
-     */
+    /** Test seam: an active bus with no Redis connection, so the flush/register logic is unit-testable. */
+    private L1InvalidationBus(boolean active) {
+        this.subConn = null;
+        this.pubConn = null;
+        this.publisher = null;
+        this.metrics = null;
+        this.closed = false;
+    }
+
     public static L1InvalidationBus noOp() {
         return new L1InvalidationBus();
     }
 
+    static L1InvalidationBus forTest() {
+        return new L1InvalidationBus(true);
+    }
+
     /**
-     * Register a per-cache handler that knows how to evict from its local L1.
-     * Returns an unregistration token; call {@link Subscription#unregister()} on shutdown.
+     * Register a per-cache handler that evicts from its local L1. Returns an
+     * unregistration token; call {@link Subscription#unregister()} on shutdown.
      */
     public Subscription register(String cacheName, Consumer<String> evictor) {
         handlers.put(cacheName, evictor);
         return () -> handlers.remove(cacheName);
     }
 
-    /**
-     * Publish an invalidation. Pass {@link #FLUSH_KEY} as l1Key to flush the whole cache.
-     */
+    /** Publish an invalidation. Pass {@link #FLUSH_KEY} as l1Key to flush the whole cache. */
     public void publish(String cacheName, String l1Key) {
-        if (closed || pubConn == null) return;
+        if (closed || publisher == null) return;
         String msg = nodeId + SEP + cacheName + SEP + l1Key;
         try {
-            pubConn.async().publish(CHANNEL_BYTES, msg.getBytes(StandardCharsets.UTF_8));
+            publisher.accept(CHANNEL_BYTES, msg.getBytes(StandardCharsets.UTF_8));
+            if (metrics != null) metrics.recordL1InvalidationPublished();
         } catch (Exception e) {
             logger.warnf(e, "L1 invalidation publish failed for %s/%s", cacheName, l1Key);
+        }
+    }
+
+    // First subscribe is startup; a later one means we reconnected and may have missed
+    // invalidations, so the local L1 is suspect and gets flushed.
+    void onSubscribed() {
+        if (closed) return;
+        if (subscribedOnce) {
+            flushLocal();
+            logger.info("L1 flushed after pub/sub reconnect");
+        } else {
+            subscribedOnce = true;
+        }
+    }
+
+    void flushLocal() {
+        for (Consumer<String> handler : handlers.values()) {
+            try {
+                handler.accept(FLUSH_KEY);
+            } catch (Exception e) {
+                logger.warnf(e, "L1 flush evictor threw");
+            }
         }
     }
 
@@ -124,6 +177,7 @@ public final class L1InvalidationBus {
         if (handler != null) {
             try {
                 handler.accept(l1Key);
+                if (metrics != null) metrics.recordL1InvalidationReceived();
             } catch (Exception e) {
                 logger.warnf(e, "L1 evictor threw for %s/%s", cacheName, l1Key);
             }
@@ -136,10 +190,14 @@ public final class L1InvalidationBus {
 
     public void close() {
         closed = true;
-        if (subConn != null) try { subConn.close(); } catch (Exception ignored) {}
-        if (pubConn != null) try { pubConn.close(); } catch (Exception ignored) {}
+        closeQuietly(subConn);
+        closeQuietly(pubConn);
         handlers.clear();
         logger.info("L1 invalidation bus closed");
+    }
+
+    private static void closeQuietly(AutoCloseable c) {
+        if (c != null) try { c.close(); } catch (Exception ignored) {}
     }
 
     /** Token returned by {@link #register} to unregister a handler. */

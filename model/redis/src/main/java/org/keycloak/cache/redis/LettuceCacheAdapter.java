@@ -17,8 +17,7 @@
 
 package org.keycloak.cache.redis;
 
-import io.lettuce.core.api.StatefulRedisConnection;
-import io.lettuce.core.api.sync.RedisCommands;
+import io.lettuce.core.cluster.api.sync.RedisClusterCommands;
 import io.lettuce.core.SetArgs;
 import org.jboss.logging.Logger;
 import org.keycloak.connections.redis.RedisClientManager;
@@ -68,10 +67,15 @@ public class LettuceCacheAdapter<K, V> implements RedisCache<K, V> {
     @SuppressWarnings("unchecked")
     public V get(K key) {
         if (metrics != null) metrics.incrementL2Op(name, "get");
-        return withConnection(cmd -> {
-            byte[] raw = cmd.get(toRedisKey(key));
-            return raw == null ? null : (V) deserialize(raw);
-        });
+        long t0 = System.nanoTime();
+        try {
+            return withConnection(cmd -> {
+                byte[] raw = cmd.get(toRedisKey(key));
+                return raw == null ? null : (V) deserialize(raw);
+            });
+        } finally {
+            if (metrics != null) metrics.l2Timer(name, "get").record(System.nanoTime() - t0, TimeUnit.NANOSECONDS);
+        }
     }
 
     @Override
@@ -88,10 +92,15 @@ public class LettuceCacheAdapter<K, V> implements RedisCache<K, V> {
     public V put(K key, V value, long ttl, TimeUnit unit) {
         // Fold GETSET + PEXPIRE (2 round-trips) into a single SET ... PX command.
         if (metrics != null) metrics.incrementL2Op(name, "set_px");
-        withConnection(cmd -> {
-            cmd.set(toRedisKey(key), serialize(value), SetArgs.Builder.px(unit.toMillis(ttl)));
-            return null;
-        });
+        long t0 = System.nanoTime();
+        try {
+            withConnection(cmd -> {
+                cmd.set(toRedisKey(key), serialize(value), SetArgs.Builder.px(unit.toMillis(ttl)));
+                return null;
+            });
+        } finally {
+            if (metrics != null) metrics.l2Timer(name, "set_px").record(System.nanoTime() - t0, TimeUnit.NANOSECONDS);
+        }
         return null;
     }
 
@@ -136,11 +145,16 @@ public class LettuceCacheAdapter<K, V> implements RedisCache<K, V> {
     @SuppressWarnings("unchecked")
     public V remove(K key) {
         if (metrics != null) metrics.incrementL2Op(name, "getdel");
-        return withConnection(cmd -> {
-            byte[] redisKey = toRedisKey(key);
-            byte[] old = cmd.getdel(redisKey);
-            return old == null ? null : (V) deserialize(old);
-        });
+        long t0 = System.nanoTime();
+        try {
+            return withConnection(cmd -> {
+                byte[] redisKey = toRedisKey(key);
+                byte[] old = cmd.getdel(redisKey);
+                return old == null ? null : (V) deserialize(old);
+            });
+        } finally {
+            if (metrics != null) metrics.l2Timer(name, "getdel").record(System.nanoTime() - t0, TimeUnit.NANOSECONDS);
+        }
     }
 
     @Override
@@ -293,11 +307,10 @@ public class LettuceCacheAdapter<K, V> implements RedisCache<K, V> {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private <R> R withConnection(java.util.function.Function<RedisCommands<byte[], byte[]>, R> action) {
-        StatefulRedisConnection<byte[], byte[]> connection = (StatefulRedisConnection<byte[], byte[]>) clientManager.getConnection();
+    private <R> R withConnection(java.util.function.Function<RedisClusterCommands<byte[], byte[]>, R> action) {
+        Object connection = clientManager.getConnection();
         try {
-            return action.apply(connection.sync());
+            return action.apply(clientManager.sync(connection));
         } finally {
             clientManager.returnConnection(connection);
         }

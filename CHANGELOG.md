@@ -8,6 +8,55 @@ the Percona Server / Amazon Corretto convention.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [26.6.3-2] - 2026-06-16
+
+Resilience hardening across the Sentinel and Cluster deployment modes. The focus is staying
+available through a primary loss: recover fast, fail fast when the cache is gone, and never
+serve stale cache afterward. No upstream Keycloak change (still built from 26.6.3).
+
+### Changed
+- Cluster mode now keeps the in-JVM L1 cache (Caffeine) active, with cross-node
+  invalidation over Redis pub/sub, the same as Standalone and Sentinel. It previously ran
+  with L1 disabled, paying a Redis round trip on every local-cache read.
+- Cluster clients now refresh their slot-to-node topology periodically and on connection
+  events, so a shard failover or reshard no longer strands the client on a node that has
+  gone away.
+- The default Redis command timeout is now 1000ms (was effectively 2000ms). The timeout is
+  applied per command and a single request can issue several, so lowering it tightens the
+  worst-case tail latency during a Redis outage. Tune with `KC_CACHE_REDIS_TIMEOUT`.
+
+### Fixed
+- Cluster mode can now serve traffic. Every distributed-cache write (auth sessions, login
+  failures, single-use tokens) previously failed in `redis-cluster://` mode because the
+  cache adapters cast the Lettuce connection to the standalone type; on a real cluster that
+  threw `ClassCastException` and returned HTTP 500 on the first login or token request.
+  Commands now flow through the connection's common command supertype, so the same code path
+  works for standalone, sentinel, and cluster. Standalone and sentinel behavior is unchanged.
+- `KC_CACHE_REDIS_TIMEOUT` is now honored. The option was exposed and documented but never
+  read by the connection factory, so the timeout was hardcoded regardless of the setting. It
+  now flows through to both the Lettuce command timeout and the Redisson client.
+- L1 caches are flushed when the pub/sub invalidation channel reconnects (for example
+  after a failover). A node that missed invalidation messages while disconnected no longer
+  serves stale entries once it comes back.
+- Sentinel connections no longer fail at connect time with "Host must not be empty." The
+  client builds the Sentinel URL from the configured sentinel hosts and master id
+  directly, rather than round-tripping through a parsed host.
+
+### Added
+- Cache metrics now cover write paths: `keycloak_redis_l2_duration_seconds` is recorded for
+  all Redis operations (previously only `hgetall`), and the
+  `keycloak_redis_l1_invalidations_published_total` / `_received_total` counters now emit
+  real values instead of staying at zero.
+
+### Notes
+- Sentinel and Cluster deployment modes are documented in
+  [docs/redis-modes.md](./docs/redis-modes.md), including ElastiCache (cluster-mode
+  enabled and disabled) and Sentinel-vs-Cluster guidance.
+- A runnable failover smoke (`benchmark/compose/failover-smoke.sh`) brings up a real
+  Sentinel or Cluster topology, kills the primary, and asserts Locke keeps serving. A
+  Redis-HA failover is a brief outage bounded by your Redis failover timers, not a
+  zero-downtime event; Locke recovers automatically and fails fast in the meantime.
+
 ## [26.6.3-1] - 2026-06-04
 
 ### Changed

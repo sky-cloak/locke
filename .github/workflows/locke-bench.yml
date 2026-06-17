@@ -6,8 +6,8 @@ name: locke-bench
 
 # NOTE: manual-only until the benchmark runs on isolated infra (EKS). A shared
 # GitHub-hosted runner co-locates the load generator with the pods, which
-# confounds the parity number, so we hold the published figure until then
-# (SKYCF-426 cloud / SKYCF-395). Re-enable the weekly schedule once that lands.
+# confounds the parity number, so we hold the published figure until the
+# cloud/EKS bench lands. Re-enable the weekly schedule once that lands.
 on:
   # schedule:
   #   - cron: '0 4 * * 1'   # Mondays 04:00 UTC, enable after EKS

@@ -5,6 +5,7 @@ box. This document covers what's available in Locke `26.6.3-1` and what's coming
 
 > Cross-references:
 > - Architecture: [redis-cache-architecture.md](./redis-cache-architecture.md)
+> - Deployment modes (Sentinel / Cluster / ElastiCache): [redis-modes.md](./redis-modes.md)
 > - General quickstart: [README.md](../README.md#quickstart-5-minutes)
 > - Tracking issue: [sky-cloak/locke#22](https://github.com/sky-cloak/locke/issues/22)
 

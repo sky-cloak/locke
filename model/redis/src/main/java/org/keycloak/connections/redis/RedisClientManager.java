@@ -24,8 +24,11 @@ import io.lettuce.core.SslOptions;
 import io.lettuce.core.SslVerifyMode;
 import io.lettuce.core.TimeoutOptions;
 import io.lettuce.core.cluster.ClusterClientOptions;
+import io.lettuce.core.cluster.ClusterTopologyRefreshOptions;
 import io.lettuce.core.cluster.RedisClusterClient;
 import io.lettuce.core.cluster.api.StatefulRedisClusterConnection;
+import io.lettuce.core.cluster.api.async.RedisClusterAsyncCommands;
+import io.lettuce.core.cluster.api.sync.RedisClusterCommands;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.support.ConnectionPoolSupport;
 import org.apache.commons.pool2.impl.GenericObjectPool;
@@ -51,6 +54,9 @@ public class RedisClientManager {
     private RedisClient standaloneClient;
     private RedisClusterClient clusterClient;
     private GenericObjectPool<StatefulRedisConnection<byte[], byte[]>> connectionPool;
+    // Cluster connections are thread-safe and multiplex over per-node channels, so one shared
+    // connection serves all callers (no pool). Standalone/sentinel use the pool above instead.
+    private volatile StatefulRedisClusterConnection<byte[], byte[]> clusterConnection;
 
     public RedisClientManager(RedisConnectionConfig config) {
         this.config = config;
@@ -124,32 +130,7 @@ public class RedisClientManager {
     }
 
     private void initSentinelClient() {
-        List<RedisURI> sentinelUris = config.getHosts().stream()
-                .map(hostPort -> RedisURI.Builder.sentinel(hostPort.getHost(), hostPort.getPort(), config.getSentinelMasterId())
-                        .withTimeout(config.getTimeout())
-                        .build())
-                .collect(Collectors.toList());
-
-        if (sentinelUris.isEmpty()) {
-            throw new IllegalStateException("No sentinel hosts configured");
-        }
-
-        // Use first URI and add others as sentinel nodes
-        RedisURI.Builder uriBuilder = RedisURI.Builder.sentinel(
-                sentinelUris.get(0).getHost(),
-                sentinelUris.get(0).getPort(),
-                config.getSentinelMasterId()
-        ).withTimeout(config.getTimeout());
-
-        for (int i = 1; i < sentinelUris.size(); i++) {
-            RedisURI uri = sentinelUris.get(i);
-            uriBuilder.withSentinel(uri.getHost(), uri.getPort());
-        }
-
-        applyTls(uriBuilder);
-        applyAuth(uriBuilder);
-
-        RedisURI redisURI = uriBuilder.build();
+        RedisURI redisURI = buildSentinelUri();
         this.standaloneClient = RedisClient.create(redisURI);
         this.standaloneClient.setOptions(buildClientOptions());
 
@@ -158,6 +139,25 @@ public class RedisClientManager {
                 buildPoolConfig()
         );
         prewarmPool();
+    }
+
+    // Build straight from the configured host/port pairs. Don't round-trip through a sentinel
+    // RedisURI: it keeps its hosts in a sentinels list, so getHost() is empty. package-private
+    // for testing.
+    RedisURI buildSentinelUri() {
+        List<RedisConnectionConfig.HostPort> sentinels = config.getHosts();
+        if (sentinels.isEmpty()) {
+            throw new IllegalStateException("No sentinel hosts configured");
+        }
+        RedisURI.Builder uriBuilder = RedisURI.Builder
+                .sentinel(sentinels.get(0).getHost(), sentinels.get(0).getPort(), config.getSentinelMasterId())
+                .withTimeout(config.getTimeout());
+        for (int i = 1; i < sentinels.size(); i++) {
+            uriBuilder.withSentinel(sentinels.get(i).getHost(), sentinels.get(i).getPort());
+        }
+        applyTls(uriBuilder);
+        applyAuth(uriBuilder);
+        return uriBuilder.build();
     }
 
     private void initClusterClient() {
@@ -175,11 +175,24 @@ public class RedisClientManager {
         ClusterClientOptions.Builder clusterOptions = ClusterClientOptions.builder()
                 .autoReconnect(true)
                 .disconnectedBehavior(ClientOptions.DisconnectedBehavior.REJECT_COMMANDS)
-                .timeoutOptions(TimeoutOptions.enabled(config.getTimeout()));
+                .timeoutOptions(TimeoutOptions.enabled(config.getTimeout()))
+                .topologyRefreshOptions(buildClusterTopologyRefreshOptions());
         if (config.isSslEnabled()) {
             clusterOptions.sslOptions(buildSslOptions());
         }
         this.clusterClient.setOptions(clusterOptions.build());
+        this.clusterConnection = clusterClient.connect(new ByteArrayCodec());
+    }
+
+    // Keep the slot->node map current so a shard failover or reshard doesn't strand the
+    // client on a dead node. package-private for testing.
+    static ClusterTopologyRefreshOptions buildClusterTopologyRefreshOptions() {
+        return ClusterTopologyRefreshOptions.builder()
+                .enablePeriodicRefresh(Duration.ofSeconds(30))
+                .enableAllAdaptiveRefreshTriggers()
+                .adaptiveRefreshTriggersTimeout(Duration.ofSeconds(30))
+                .dynamicRefreshSources(true)
+                .build();
     }
 
     // See initStandaloneClient: fail fast on a Redis outage instead of hanging request threads.
@@ -239,15 +252,14 @@ public class RedisClientManager {
      * Lettuce's .sync() API serializes commands per connection, so a pool of N connections
      * is what gives us N-way parallelism. (A single shared connection causes head-of-line
      * blocking under concurrent load — verified by benchmark: 5.96 vs 8.1 iter/s at 50 VUs.)
-     * For cluster mode, returns a new cluster connection (cluster connections are managed
-     * differently by Lettuce).
+     * For cluster mode, returns the shared cluster connection (thread-safe; not pooled).
      *
-     * @return Redis connection
+     * @return Redis connection (StatefulRedisConnection or StatefulRedisClusterConnection)
      */
     public Object getConnection() {
         try {
             if (config.getMode() == RedisConnectionConfig.Mode.CLUSTER) {
-                return clusterClient.connect(new ByteArrayCodec());
+                return clusterConnection;
             } else {
                 return connectionPool.borrowObject();
             }
@@ -258,12 +270,38 @@ public class RedisClientManager {
     }
 
     /**
-     * Return a connection to the pool.
+     * Return a connection. No-op in cluster mode (the shared connection lives for the manager's
+     * lifetime and is closed in {@link #close()}); pooled connections are returned to the pool.
      */
     public void returnConnection(Object connection) {
-        if (config.getMode() != RedisConnectionConfig.Mode.CLUSTER && connection instanceof StatefulRedisConnection) {
+        if (connection == null || config.getMode() == RedisConnectionConfig.Mode.CLUSTER) {
+            return;
+        }
+        if (connection instanceof StatefulRedisConnection) {
             connectionPool.returnObject((StatefulRedisConnection<byte[], byte[]>) connection);
         }
+    }
+
+    /**
+     * Sync commands for a borrowed connection, working across all modes. The standalone/sentinel
+     * connection yields {@code RedisCommands} and the cluster connection yields
+     * {@code RedisAdvancedClusterCommands}; both extend {@link RedisClusterCommands}.
+     */
+    @SuppressWarnings("unchecked")
+    public RedisClusterCommands<byte[], byte[]> sync(Object connection) {
+        if (connection instanceof StatefulRedisClusterConnection) {
+            return ((StatefulRedisClusterConnection<byte[], byte[]>) connection).sync();
+        }
+        return ((StatefulRedisConnection<byte[], byte[]>) connection).sync();
+    }
+
+    /** Async commands for a borrowed connection. See {@link #sync(Object)}. */
+    @SuppressWarnings("unchecked")
+    public RedisClusterAsyncCommands<byte[], byte[]> async(Object connection) {
+        if (connection instanceof StatefulRedisClusterConnection) {
+            return ((StatefulRedisClusterConnection<byte[], byte[]>) connection).async();
+        }
+        return ((StatefulRedisConnection<byte[], byte[]>) connection).async();
     }
 
     /**
@@ -289,20 +327,14 @@ public class RedisClientManager {
         logger.infof("Pre-warmed Redis connection pool: %d idle connections ready", target);
     }
 
-    /**
-     * Check if Redis is healthy by performing a ping.
-     *
-     * @return true if healthy, false otherwise
-     */
-    /**
-     * Expose the underlying Lettuce client (standalone/sentinel modes).
-     * Used by {@link org.keycloak.cache.redis.L1InvalidationBus} to open a
-     * dedicated pub/sub connection for L1 invalidation events.
-     *
-     * @return the standalone RedisClient, or null in cluster mode
-     */
+    /** Lettuce client for standalone/sentinel modes; null in cluster mode. Used by the L1 bus for pub/sub. */
     public RedisClient getStandaloneClient() {
         return standaloneClient;
+    }
+
+    /** Lettuce cluster client for cluster mode; null otherwise. Used by the L1 bus for cluster pub/sub. */
+    public RedisClusterClient getClusterClient() {
+        return clusterClient;
     }
 
     public boolean isHealthy() {
@@ -338,6 +370,10 @@ public class RedisClientManager {
 
         if (standaloneClient != null) {
             standaloneClient.shutdown();
+        }
+
+        if (clusterConnection != null) {
+            clusterConnection.close();
         }
 
         if (clusterClient != null) {

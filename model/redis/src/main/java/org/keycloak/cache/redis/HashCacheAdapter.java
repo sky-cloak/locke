@@ -12,9 +12,8 @@
 package org.keycloak.cache.redis;
 
 import io.lettuce.core.RedisFuture;
-import io.lettuce.core.api.StatefulRedisConnection;
-import io.lettuce.core.api.async.RedisAsyncCommands;
-import io.lettuce.core.api.sync.RedisCommands;
+import io.lettuce.core.cluster.api.async.RedisClusterAsyncCommands;
+import io.lettuce.core.cluster.api.sync.RedisClusterCommands;
 import org.jboss.logging.Logger;
 import org.keycloak.connections.redis.RedisClientManager;
 
@@ -97,7 +96,12 @@ public final class HashCacheAdapter<K> {
     /** Read a single field. Returns null if field or key is absent. */
     public byte[] getField(K key, String field) {
         if (metrics != null) metrics.incrementL2Op(name, "hget");
-        return withConnection(cmd -> cmd.hget(entityKey(key), field.getBytes(StandardCharsets.UTF_8)));
+        long t0 = System.nanoTime();
+        try {
+            return withConnection(cmd -> cmd.hget(entityKey(key), field.getBytes(StandardCharsets.UTF_8)));
+        } finally {
+            if (metrics != null) metrics.l2Timer(name, "hget").record(System.nanoTime() - t0, java.util.concurrent.TimeUnit.NANOSECONDS);
+        }
     }
 
     /**
@@ -115,11 +119,16 @@ public final class HashCacheAdapter<K> {
             raw.put(e.getKey().getBytes(StandardCharsets.UTF_8), e.getValue());
         }
         if (metrics != null) metrics.incrementL2Op(name, "hset_multi");
-        pipelineWrite(key, async -> {
-            RedisFuture<?> f1 = async.hset(entityKey(key), raw);
-            RedisFuture<?> f2 = ttlSeconds > 0 ? async.expire(entityKey(key), ttlSeconds) : null;
-            return f2 == null ? new RedisFuture<?>[]{f1} : new RedisFuture<?>[]{f1, f2};
-        });
+        long t0 = System.nanoTime();
+        try {
+            pipelineWrite(key, async -> {
+                RedisFuture<?> f1 = async.hset(entityKey(key), raw);
+                RedisFuture<?> f2 = ttlSeconds > 0 ? async.expire(entityKey(key), ttlSeconds) : null;
+                return f2 == null ? new RedisFuture<?>[]{f1} : new RedisFuture<?>[]{f1, f2};
+            });
+        } finally {
+            if (metrics != null) metrics.l2Timer(name, "hset_multi").record(System.nanoTime() - t0, java.util.concurrent.TimeUnit.NANOSECONDS);
+        }
     }
 
     /** Update a single field. Does NOT change TTL — entity must already exist with TTL. */
@@ -130,13 +139,18 @@ public final class HashCacheAdapter<K> {
     /** Update a single field and refresh TTL. Pipelined HSET + EXPIRE — 1 RT. */
     public void putField(K key, String field, byte[] value, long ttlSeconds) {
         if (metrics != null) metrics.incrementL2Op(name, "hset");
-        pipelineWrite(key, async -> {
-            byte[] redisKey = entityKey(key);
-            byte[] fieldBytes = field.getBytes(StandardCharsets.UTF_8);
-            RedisFuture<?> f1 = async.hset(redisKey, fieldBytes, value);
-            RedisFuture<?> f2 = ttlSeconds > 0 ? async.expire(redisKey, ttlSeconds) : null;
-            return f2 == null ? new RedisFuture<?>[]{f1} : new RedisFuture<?>[]{f1, f2};
-        });
+        long t0 = System.nanoTime();
+        try {
+            pipelineWrite(key, async -> {
+                byte[] redisKey = entityKey(key);
+                byte[] fieldBytes = field.getBytes(StandardCharsets.UTF_8);
+                RedisFuture<?> f1 = async.hset(redisKey, fieldBytes, value);
+                RedisFuture<?> f2 = ttlSeconds > 0 ? async.expire(redisKey, ttlSeconds) : null;
+                return f2 == null ? new RedisFuture<?>[]{f1} : new RedisFuture<?>[]{f1, f2};
+            });
+        } finally {
+            if (metrics != null) metrics.l2Timer(name, "hset").record(System.nanoTime() - t0, java.util.concurrent.TimeUnit.NANOSECONDS);
+        }
     }
 
     /** Delete a hash entity. Returns true if deleted. */
@@ -156,10 +170,9 @@ public final class HashCacheAdapter<K> {
      * Pipelined HDEL + EXPIRE — 1 RT instead of 2.
      */
     public boolean deleteFieldRefreshTtl(K key, String field, long ttlSeconds) {
-        StatefulRedisConnection<byte[], byte[]> conn =
-                (StatefulRedisConnection<byte[], byte[]>) clientManager.getConnection();
+        Object conn = clientManager.getConnection();
         try {
-            RedisAsyncCommands<byte[], byte[]> async = conn.async();
+            RedisClusterAsyncCommands<byte[], byte[]> async = clientManager.async(conn);
             byte[] redisKey = entityKey(key);
             RedisFuture<Long> hdel = async.hdel(redisKey, field.getBytes(StandardCharsets.UTF_8));
             RedisFuture<?> exp = ttlSeconds > 0 ? async.expire(redisKey, ttlSeconds) : null;
@@ -223,12 +236,10 @@ public final class HashCacheAdapter<K> {
         return key.toString().getBytes(StandardCharsets.UTF_8);
     }
 
-    @SuppressWarnings("unchecked")
-    private <R> R withConnection(java.util.function.Function<RedisCommands<byte[], byte[]>, R> action) {
-        StatefulRedisConnection<byte[], byte[]> connection =
-                (StatefulRedisConnection<byte[], byte[]>) clientManager.getConnection();
+    private <R> R withConnection(java.util.function.Function<RedisClusterCommands<byte[], byte[]>, R> action) {
+        Object connection = clientManager.getConnection();
         try {
-            return action.apply(connection.sync());
+            return action.apply(clientManager.sync(connection));
         } finally {
             clientManager.returnConnection(connection);
         }
@@ -239,13 +250,11 @@ public final class HashCacheAdapter<K> {
      * one TCP write window. Bench-proven win over sequential .sync() calls when
      * the operations together would otherwise require N round-trips.
      */
-    @SuppressWarnings("unchecked")
     private void pipelineWrite(K key,
-                               java.util.function.Function<RedisAsyncCommands<byte[], byte[]>, RedisFuture<?>[]> action) {
-        StatefulRedisConnection<byte[], byte[]> conn =
-                (StatefulRedisConnection<byte[], byte[]>) clientManager.getConnection();
+                               java.util.function.Function<RedisClusterAsyncCommands<byte[], byte[]>, RedisFuture<?>[]> action) {
+        Object conn = clientManager.getConnection();
         try {
-            RedisFuture<?>[] futures = action.apply(conn.async());
+            RedisFuture<?>[] futures = action.apply(clientManager.async(conn));
             io.lettuce.core.LettuceFutures.awaitAll(2, java.util.concurrent.TimeUnit.SECONDS, futures);
         } finally {
             clientManager.returnConnection(conn);

@@ -114,7 +114,7 @@ public class RedisConnectionConfigTest {
         assertThat(config.getPoolMinSize(), equalTo(16));
         assertThat(config.getPoolMaxSize(), equalTo(64));
         assertThat(config.getRetryAttempts(), equalTo(3));
-        assertThat(config.getTimeout().toMillis(), equalTo(2000L));
+        assertThat(config.getTimeout().toMillis(), equalTo(1000L));
     }
 
     @Test(expected = IllegalArgumentException.class)

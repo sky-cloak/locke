@@ -226,8 +226,11 @@ public class CachingOptions {
 
     public static final Option<Integer> CACHE_REDIS_TIMEOUT = new OptionBuilder<>(CACHE_REDIS_TIMEOUT_PROPERTY, Integer.class)
             .category(OptionCategory.CACHE)
-            .description("The Redis connection timeout in milliseconds.")
-            .defaultValue(10000)
+            .description("The Redis command timeout in milliseconds, applied per command. This is the fail-fast "
+                    + "window when Redis is unreachable: a single command errors after this long instead of "
+                    + "hanging. Note that one request can issue several cache commands, so its worst-case stall "
+                    + "is a multiple of this value; lower it for tighter tail latency during a Redis outage.")
+            .defaultValue(1000)
             .build();
 
     public static final Option<Integer> CACHE_REDIS_MAX_POOL_SIZE = new OptionBuilder<>(CACHE_REDIS_MAX_POOL_SIZE_PROPERTY, Integer.class)

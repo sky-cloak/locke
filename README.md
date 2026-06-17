@@ -112,7 +112,8 @@ See [COMPATIBILITY.md](./COMPATIBILITY.md) for the full matrix and support windo
 
 Every other Keycloak option works exactly as upstream. Locke adds no new database,
 no new admin API, and no new operational concept beyond "you may point the cache at
-Redis." TLS + auth details: [docs/redis-security.md](./docs/redis-security.md).
+Redis." TLS + auth details: [docs/redis-security.md](./docs/redis-security.md); Sentinel /
+Cluster / ElastiCache setup: [docs/redis-modes.md](./docs/redis-modes.md).
 
 ## Performance
 

@@ -337,7 +337,7 @@ public class RedisConnectionConfig {
         private boolean tlsVerifyHostname = true;
         private int poolMinSize = 16;
         private int poolMaxSize = 64;
-        private Duration timeout = Duration.ofMillis(2000);
+        private Duration timeout = Duration.ofMillis(1000);
         private int retryAttempts = 3;
         private Duration retryDelay = Duration.ofMillis(100);
 
