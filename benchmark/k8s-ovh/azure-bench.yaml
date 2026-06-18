@@ -109,7 +109,7 @@ spec:
             - { name: KC_BOOTSTRAP_ADMIN_PASSWORD, value: admin }
             - { name: JAVA_OPTS_APPEND, value: "-Xms2g -Xmx4g -XX:+UseG1GC" }
           ports: [ { name: http, containerPort: 8080 }, { name: jgroups, containerPort: 7800 }, { name: mgmt, containerPort: 9000 } ]
-          resources: { requests: { cpu: "5", memory: 6Gi }, limits: { cpu: "5", memory: 6Gi } }
+          resources: { requests: { cpu: "8", memory: 8Gi }, limits: { cpu: "8", memory: 8Gi } }
           readinessProbe: { httpGet: { path: /health/ready, port: 9000 }, initialDelaySeconds: 20, periodSeconds: 5, failureThreshold: 60 }
 ---
 # ---------- B3: Locke 26.6.3-2, Redis backend ----------
@@ -159,7 +159,7 @@ spec:
             - { name: KC_BOOTSTRAP_ADMIN_PASSWORD, value: admin }
             - { name: JAVA_OPTS_APPEND, value: "-Xms2g -Xmx4g -XX:+UseG1GC" }
           ports: [ { name: http, containerPort: 8080 }, { name: mgmt, containerPort: 9000 } ]
-          resources: { requests: { cpu: "5", memory: 6Gi }, limits: { cpu: "5", memory: 6Gi } }
+          resources: { requests: { cpu: "8", memory: 8Gi }, limits: { cpu: "8", memory: 8Gi } }
           readinessProbe: { httpGet: { path: /health/ready, port: 9000 }, initialDelaySeconds: 20, periodSeconds: 5, failureThreshold: 60 }
 ---
 # ---------- load generator (Gatling kcb; run-kcb.sh exec'd into it) ----------
