@@ -1,0 +1,176 @@
+# Locke vs Infinispan benchmark on Azure AKS (skycloak-prod-us), dedicated tainted lockebench pool.
+# Self-contained adaptation of the OVH v3 manifests: adds tolerations for the
+# dedicated=locke-bench:NoSchedule taint, uses the 26.6.3 bench images, enables metrics
+# histograms, and sizes KC pods to 5 vCPU to fit the 8-vCPU E8as_v7 nodes (after AKS/daemonset
+# overhead). Nodes are labelled bench-role=kc (3) / bench-role=infra (1) before applying.
+apiVersion: v1
+kind: Namespace
+metadata: { name: locke-bench }
+---
+# ---------- infra: postgres ----------
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: postgres, namespace: locke-bench }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: postgres } }
+  template:
+    metadata: { labels: { app: postgres } }
+    spec:
+      nodeSelector: { bench-role: infra }
+      tolerations: [ { key: dedicated, operator: Equal, value: locke-bench, effect: NoSchedule } ]
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          args: ["postgres", "-c", "max_connections=500", "-c", "shared_buffers=512MB"]
+          env:
+            - { name: POSTGRES_DB, value: keycloak }
+            - { name: POSTGRES_USER, value: keycloak }
+            - { name: POSTGRES_PASSWORD, value: keycloak }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          ports: [ { containerPort: 5432 } ]
+          resources: { requests: { cpu: "500m", memory: 1Gi }, limits: { memory: 4Gi } }
+          volumeMounts: [ { name: data, mountPath: /var/lib/postgresql/data } ]
+      volumes: [ { name: data, emptyDir: {} } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: postgres, namespace: locke-bench }
+spec: { selector: { app: postgres }, ports: [ { port: 5432, targetPort: 5432 } ] }
+---
+# ---------- infra: redis ----------
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: redis, namespace: locke-bench }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: redis } }
+  template:
+    metadata: { labels: { app: redis } }
+    spec:
+      nodeSelector: { bench-role: infra }
+      tolerations: [ { key: dedicated, operator: Equal, value: locke-bench, effect: NoSchedule } ]
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          args: ["redis-server", "--save", "", "--appendonly", "no"]
+          ports: [ { containerPort: 6379 } ]
+          resources: { requests: { cpu: "500m", memory: 512Mi }, limits: { memory: 2Gi } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: redis, namespace: locke-bench }
+spec: { selector: { app: redis }, ports: [ { port: 6379, targetPort: 6379 } ] }
+---
+# ---------- A3: vanilla Keycloak 26.6.3, embedded Infinispan (jdbc-ping) ----------
+apiVersion: v1
+kind: Service
+metadata: { name: kc-a3-headless, namespace: locke-bench }
+spec: { clusterIP: None, selector: { app: kc-a3 }, ports: [ { name: http, port: 8080 }, { name: jgroups, port: 7800 } ] }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: kc-a3, namespace: locke-bench }
+spec: { selector: { app: kc-a3 }, ports: [ { name: http, port: 8080, targetPort: 8080 } ] }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: kc-a3, namespace: locke-bench }
+spec:
+  serviceName: kc-a3-headless
+  replicas: 3
+  selector: { matchLabels: { app: kc-a3 } }
+  template:
+    metadata: { labels: { app: kc-a3 } }
+    spec:
+      nodeSelector: { bench-role: kc }
+      tolerations: [ { key: dedicated, operator: Equal, value: locke-bench, effect: NoSchedule } ]
+      imagePullSecrets: [ { name: ghcr-pull } ]
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector: { matchLabels: { app: kc-a3 } }
+      containers:
+        - name: keycloak
+          image: ghcr.io/sky-cloak/locke-bench-vanilla:26.6.3
+          env:
+            - { name: KC_DB, value: postgres }
+            - { name: KC_DB_URL, value: "jdbc:postgresql://postgres:5432/keycloak" }
+            - { name: KC_DB_USERNAME, value: keycloak }
+            - { name: KC_DB_PASSWORD, value: keycloak }
+            - { name: KC_DB_POOL_MAX_SIZE, value: "50" }
+            - { name: KC_CACHE_STACK, value: jdbc-ping }
+            - { name: KC_HOSTNAME_STRICT, value: "false" }
+            - { name: KC_HTTP_ENABLED, value: "true" }
+            - { name: KC_PROXY_HEADERS, value: xforwarded }
+            - { name: KC_HTTP_METRICS_HISTOGRAMS_ENABLED, value: "true" }
+            - { name: KC_BOOTSTRAP_ADMIN_USERNAME, value: admin }
+            - { name: KC_BOOTSTRAP_ADMIN_PASSWORD, value: admin }
+            - { name: JAVA_OPTS_APPEND, value: "-Xms2g -Xmx4g -XX:+UseG1GC" }
+          ports: [ { name: http, containerPort: 8080 }, { name: jgroups, containerPort: 7800 }, { name: mgmt, containerPort: 9000 } ]
+          resources: { requests: { cpu: "5", memory: 6Gi }, limits: { cpu: "5", memory: 6Gi } }
+          readinessProbe: { httpGet: { path: /health/ready, port: 9000 }, initialDelaySeconds: 20, periodSeconds: 5, failureThreshold: 60 }
+---
+# ---------- B3: Locke 26.6.3-2, Redis backend ----------
+apiVersion: v1
+kind: Service
+metadata: { name: kc-b3-headless, namespace: locke-bench }
+spec: { clusterIP: None, selector: { app: kc-b3 }, ports: [ { name: http, port: 8080 } ] }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: kc-b3, namespace: locke-bench }
+spec: { selector: { app: kc-b3 }, ports: [ { name: http, port: 8080, targetPort: 8080 } ] }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: kc-b3, namespace: locke-bench }
+spec:
+  serviceName: kc-b3-headless
+  replicas: 3
+  selector: { matchLabels: { app: kc-b3 } }
+  template:
+    metadata: { labels: { app: kc-b3 } }
+    spec:
+      nodeSelector: { bench-role: kc }
+      tolerations: [ { key: dedicated, operator: Equal, value: locke-bench, effect: NoSchedule } ]
+      imagePullSecrets: [ { name: ghcr-pull } ]
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector: { matchLabels: { app: kc-b3 } }
+      containers:
+        - name: keycloak
+          image: ghcr.io/sky-cloak/locke-bench-locke:26.6.3-2
+          env:
+            - { name: KC_DB, value: postgres }
+            - { name: KC_DB_URL, value: "jdbc:postgresql://postgres:5432/keycloak" }
+            - { name: KC_DB_USERNAME, value: keycloak }
+            - { name: KC_DB_PASSWORD, value: keycloak }
+            - { name: KC_DB_POOL_MAX_SIZE, value: "50" }
+            - { name: KC_CACHE_REDIS_URL, value: "redis://redis:6379" }
+            - { name: KC_HOSTNAME_STRICT, value: "false" }
+            - { name: KC_HTTP_ENABLED, value: "true" }
+            - { name: KC_PROXY_HEADERS, value: xforwarded }
+            - { name: KC_HTTP_METRICS_HISTOGRAMS_ENABLED, value: "true" }
+            - { name: KC_BOOTSTRAP_ADMIN_USERNAME, value: admin }
+            - { name: KC_BOOTSTRAP_ADMIN_PASSWORD, value: admin }
+            - { name: JAVA_OPTS_APPEND, value: "-Xms2g -Xmx4g -XX:+UseG1GC" }
+          ports: [ { name: http, containerPort: 8080 }, { name: mgmt, containerPort: 9000 } ]
+          resources: { requests: { cpu: "5", memory: 6Gi }, limits: { cpu: "5", memory: 6Gi } }
+          readinessProbe: { httpGet: { path: /health/ready, port: 9000 }, initialDelaySeconds: 20, periodSeconds: 5, failureThreshold: 60 }
+---
+# ---------- load generator (Gatling kcb; run-kcb.sh exec'd into it) ----------
+apiVersion: v1
+kind: Pod
+metadata: { name: loadgen, namespace: locke-bench, labels: { app: loadgen } }
+spec:
+  nodeSelector: { bench-role: infra }
+  tolerations: [ { key: dedicated, operator: Equal, value: locke-bench, effect: NoSchedule } ]
+  imagePullSecrets: [ { name: ghcr-pull } ]
+  containers:
+    - name: loadgen
+      image: ghcr.io/sky-cloak/locke-bench-loadgen:1
+      resources: { requests: { cpu: "4", memory: 4Gi }, limits: { cpu: "7", memory: 6Gi } }
