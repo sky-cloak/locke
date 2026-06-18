@@ -167,7 +167,9 @@ apiVersion: v1
 kind: Pod
 metadata: { name: loadgen, namespace: locke-bench, labels: { app: loadgen } }
 spec:
-  nodeSelector: { bench-role: infra }
+  # Dedicated node, isolated from both the KC pods and Redis/Postgres so the load
+  # generator can never contend for CPU with anything under test.
+  nodeSelector: { bench-role: loadgen }
   tolerations: [ { key: dedicated, operator: Equal, value: locke-bench, effect: NoSchedule } ]
   imagePullSecrets: [ { name: ghcr-pull } ]
   containers:
