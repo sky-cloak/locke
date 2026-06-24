@@ -183,6 +183,8 @@
                         <exclude>**/RedisClientManagerTest.java</exclude>
                         <exclude>**/RedisConnectionProviderTest.java</exclude>
                         <exclude>**/RedisTlsClientManagerTest.java</exclude>
+                        <exclude>**/RedisGetDelLegacyVersionTest.java</exclude>
+                        <exclude>**/RedisGetDelConcurrencyTest.java</exclude>
                     </excludes>
                 </configuration>
             </plugin>

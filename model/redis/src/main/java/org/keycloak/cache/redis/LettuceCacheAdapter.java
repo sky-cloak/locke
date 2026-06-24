@@ -46,15 +46,21 @@ public class LettuceCacheAdapter<K, V> implements RedisCache<K, V> {
     private final RedisClientManager clientManager;
     private final byte[] prefix;
     private final RedisMetrics metrics;
+    private final LuaScripts luaScripts;
 
     public LettuceCacheAdapter(String name, RedisClientManager clientManager) {
-        this(name, clientManager, null);
+        this(name, clientManager, null, null);
     }
 
     public LettuceCacheAdapter(String name, RedisClientManager clientManager, RedisMetrics metrics) {
+        this(name, clientManager, metrics, null);
+    }
+
+    public LettuceCacheAdapter(String name, RedisClientManager clientManager, RedisMetrics metrics, LuaScripts luaScripts) {
         this.name = name;
         this.clientManager = clientManager;
         this.metrics = metrics;
+        this.luaScripts = luaScripts;
         this.prefix = (name + ":").getBytes(StandardCharsets.UTF_8);
     }
 
@@ -147,11 +153,14 @@ public class LettuceCacheAdapter<K, V> implements RedisCache<K, V> {
         if (metrics != null) metrics.incrementL2Op(name, "getdel");
         long t0 = System.nanoTime();
         try {
-            return withConnection(cmd -> {
-                byte[] redisKey = toRedisKey(key);
-                byte[] old = cmd.getdel(redisKey);
-                return old == null ? null : (V) deserialize(old);
-            });
+            byte[] redisKey = toRedisKey(key);
+            // Atomic get-and-delete. The Lua GET+DEL path runs on Redis 6.0 (classic Azure
+            // Cache for Redis); native GETDEL needs 6.2+ (see docs/adr/0003). luaScripts manages
+            // its own pooled connection, so it must NOT be nested inside withConnection.
+            byte[] old = (luaScripts != null)
+                    ? luaScripts.getDel(redisKey)
+                    : withConnection(cmd -> cmd.getdel(redisKey));
+            return old == null ? null : (V) deserialize(old);
         } finally {
             if (metrics != null) metrics.l2Timer(name, "getdel").record(System.nanoTime() - t0, TimeUnit.NANOSECONDS);
         }

@@ -45,7 +45,8 @@ import java.nio.charset.StandardCharsets;
  * <p>Scripts are deliberately small — Redis stalls all commands during script
  * execution, so long scripts hurt throughput.
  */
-public final class LuaScripts {
+// Non-final so the cache adapter can be unit-tested with a LuaScripts test double.
+public class LuaScripts {
 
     private static final Logger logger = Logger.getLogger(LuaScripts.class);
 
@@ -97,11 +98,25 @@ public final class LuaScripts {
             "if current_ttl < target then redis.call('EXPIRE', KEYS[1], target) end\n" +
             "return added";
 
+    /**
+     * Atomic get-and-delete — the equivalent of Redis 6.2's {@code GETDEL}, but built from
+     * {@code GET}+{@code DEL} inside a Lua script so it runs on {@code EVAL} (Redis 2.6+).
+     * This keeps Locke runnable on Redis 6.0, notably classic Azure Cache for Redis. See
+     * docs/adr/0003.
+     * <p>KEYS[1] = key
+     * <p>Returns: the old value (bulk), or nil if the key was absent.
+     */
+    public static final String GET_DEL =
+            "local v = redis.call('GET', KEYS[1])\n" +
+            "redis.call('DEL', KEYS[1])\n" +
+            "return v";
+
     private final RedisClientManager clientManager;
     private final RedisMetrics metrics;
     private volatile String casFieldSha;
     private volatile String setIfNewerSha;
     private volatile String indexAddSha;
+    private volatile String getDelSha;
 
     public LuaScripts(RedisClientManager clientManager) {
         this(clientManager, null);
@@ -117,8 +132,9 @@ public final class LuaScripts {
         casFieldSha = scriptLoad(CAS_FIELD_AND_TTL);
         setIfNewerSha = scriptLoad(SET_IF_NEWER_TIMESTAMP);
         indexAddSha = scriptLoad(INDEX_ADD_WITH_TTL);
-        logger.infof("Loaded %d Lua scripts (CAS=%s, NEWER=%s, IDXADD=%s)",
-                3, casFieldSha, setIfNewerSha, indexAddSha);
+        getDelSha = scriptLoad(GET_DEL);
+        logger.infof("Loaded %d Lua scripts (CAS=%s, NEWER=%s, IDXADD=%s, GETDEL=%s)",
+                4, casFieldSha, setIfNewerSha, indexAddSha, getDelSha);
     }
 
     /**
@@ -154,12 +170,32 @@ public final class LuaScripts {
                 bytes(String.valueOf(ttlSeconds))));
     }
 
+    /**
+     * Run {@link #GET_DEL}: atomically return the old value and delete the key.
+     * Equivalent to {@code GETDEL} but works on Redis 6.0 (see docs/adr/0003).
+     * Returns the old value, or {@code null} if the key was absent.
+     */
+    public byte[] getDel(byte[] key) {
+        return timedBytes("get_del", () -> evalBytes(getDelSha, GET_DEL, new byte[][]{key}));
+    }
+
     private long timed(String scriptName, java.util.function.LongSupplier action) {
         if (metrics == null) return action.getAsLong();
         metrics.incrementLuaInvocation(scriptName);
         long t0 = System.nanoTime();
         try {
             return action.getAsLong();
+        } finally {
+            metrics.luaTimer(scriptName).record(System.nanoTime() - t0, java.util.concurrent.TimeUnit.NANOSECONDS);
+        }
+    }
+
+    private byte[] timedBytes(String scriptName, java.util.function.Supplier<byte[]> action) {
+        if (metrics == null) return action.get();
+        metrics.incrementLuaInvocation(scriptName);
+        long t0 = System.nanoTime();
+        try {
+            return action.get();
         } finally {
             metrics.luaTimer(scriptName).record(System.nanoTime() - t0, java.util.concurrent.TimeUnit.NANOSECONDS);
         }
@@ -178,6 +214,20 @@ public final class LuaScripts {
                 // Script flushed; fall through to EVAL which re-loads
             }
             return cmd.eval(body, ScriptOutputType.INTEGER, keys, args);
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private byte[] evalBytes(String sha, String body, byte[][] keys, byte[]... args) {
+        return withConnection(cmd -> {
+            try {
+                if (sha != null) {
+                    return cmd.evalsha(sha, ScriptOutputType.VALUE, keys, args);
+                }
+            } catch (io.lettuce.core.RedisNoScriptException nse) {
+                // Script flushed (server restart / failover); fall through to EVAL which re-loads.
+            }
+            return cmd.eval(body, ScriptOutputType.VALUE, keys, args);
         });
     }
 
