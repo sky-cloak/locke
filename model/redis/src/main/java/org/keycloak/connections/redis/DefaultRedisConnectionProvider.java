@@ -158,7 +158,7 @@ public class DefaultRedisConnectionProvider implements RedisConnectionProvider {
                         l1Bus, l1Config, metrics);
             }
 
-            LettuceCacheAdapter<K, V> l2 = new LettuceCacheAdapter<>(cacheName, clientManager, metrics);
+            LettuceCacheAdapter<K, V> l2 = new LettuceCacheAdapter<>(cacheName, clientManager, metrics, luaScripts);
             // L1 bypass for: cluster mode (no shared bus), or caches with unique-per-request
             // keys where L1 only adds publish overhead without hit benefit.
             if (l1Bus == null || shouldSkipL1(cacheName)) return l2;

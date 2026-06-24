@@ -54,7 +54,7 @@ When `--cache=redis` is set, 5 Infinispan session provider factories still activ
 
 **Decision**: Implement `RedisSingleUseObjectProvider` using Redis `SET` with `NX` (set-if-not-exists) for single-use guarantee and `EX` for automatic expiration.
 
-**Implementation**: Each action token becomes a Redis key with TTL. The `put()` uses `SETNX`, `get()` reads, `remove()` uses `GETDEL`. Revoked token persistence delegates to `SingleUseObjectPersisterProvider` (existing JPA implementation).
+**Implementation**: Each action token becomes a Redis key with TTL. The `put()` uses `SETNX`, `get()` reads, `remove()` does an atomic get-and-delete via a Lua `GET`+`DEL` script (equivalent to `GETDEL` but runs on Redis 6.0; see adr/0003). Revoked token persistence delegates to `SingleUseObjectPersisterProvider` (existing JPA implementation).
 
 ### AD-5: StickySessionEncoderProvider — No topology routing
 
