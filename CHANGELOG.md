@@ -8,12 +8,12 @@ the Percona Server / Amazon Corretto convention.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [26.6.3-3] - 2026-06-24
 
 ### Fixed
 - Single-use object removal no longer requires Redis 6.2. The atomic get-and-delete now runs as a
   Lua `GET`+`DEL` script (`EVAL`, Redis 2.6+) instead of native `GETDEL`, so Locke runs on **Redis
-  6.0** — notably classic Azure Cache for Redis. Reported in #22 / #40; see `docs/adr/0003`.
+  6.0**, notably classic Azure Cache for Redis. Reported in #22 / #40; see `docs/adr/0003`.
 
 ## [26.6.3-2] - 2026-06-16
 
