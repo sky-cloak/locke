@@ -40,14 +40,17 @@ public class CachingOptions {
 
     public enum Mechanism {
         ispn,
-        local
+        local,
+        redis
     }
 
     public static final Option<Mechanism> CACHE = new OptionBuilder<>("cache", Mechanism.class)
             .category(OptionCategory.CACHE)
+            .buildTime(true)
             .description("Defines the cache mechanism for high-availability. "
                     + "By default in production mode, a 'ispn' cache is used to create a cluster between multiple server nodes. "
-                    + "By default in development mode, a 'local' cache disables clustering and is intended for development and testing purposes.")
+                    + "By default in development mode, a 'local' cache disables clustering and is intended for development and testing purposes. "
+                    + "Use 'redis' for Redis-based distributed caching.")
             .build();
 
     public enum Stack {
@@ -184,6 +187,75 @@ public class CachingOptions {
     public static final Option<List<String>> CACHE_REMOTE_BACKUP_SITES = OptionBuilder.listOptionBuilder(CACHE_REMOTE_BACKUP_SITES_PROPERTY, String.class)
             .category(OptionCategory.CACHE)
             .description("Configures a list of backup sites names to where the external Infinispan cluster backups the Keycloak data.")
+            .build();
+
+    // Redis cache configuration options
+    private static final String CACHE_REDIS_PREFIX = "cache-redis";
+    public static final String CACHE_REDIS_URL_PROPERTY = CACHE_REDIS_PREFIX + "-url";
+    public static final String CACHE_REDIS_USERNAME_PROPERTY = CACHE_REDIS_PREFIX + "-username";
+    public static final String CACHE_REDIS_PASSWORD_PROPERTY = CACHE_REDIS_PREFIX + "-password";
+    public static final String CACHE_REDIS_DATABASE_PROPERTY = CACHE_REDIS_PREFIX + "-database";
+    public static final String CACHE_REDIS_TIMEOUT_PROPERTY = CACHE_REDIS_PREFIX + "-timeout";
+    public static final String CACHE_REDIS_MAX_POOL_SIZE_PROPERTY = CACHE_REDIS_PREFIX + "-max-pool-size";
+    public static final String CACHE_REDIS_MIN_IDLE_PROPERTY = CACHE_REDIS_PREFIX + "-min-idle";
+    public static final String CACHE_REDIS_TLS_CA_FILE_PROPERTY = CACHE_REDIS_PREFIX + "-tls-ca-file";
+    public static final String CACHE_REDIS_TLS_VERIFY_HOSTNAME_PROPERTY = CACHE_REDIS_PREFIX + "-tls-verify-hostname";
+
+    public static final Option<String> CACHE_REDIS_URL = new OptionBuilder<>(CACHE_REDIS_URL_PROPERTY, String.class)
+            .category(OptionCategory.CACHE)
+            .description("The Redis connection URL. Format: redis[s]://[username:password@]host:port[/database], "
+                    + "redis[s]-sentinel://...?sentinelMasterId=masterId, or redis[s]-cluster://h1,h2,h3. "
+                    + "Use the `rediss` scheme (note the second `s`) to enable TLS.")
+            .build();
+
+    public static final Option<String> CACHE_REDIS_USERNAME = new OptionBuilder<>(CACHE_REDIS_USERNAME_PROPERTY, String.class)
+            .category(OptionCategory.CACHE)
+            .description("The username for Redis authentication. Required if the Redis server requires authentication.")
+            .build();
+
+    public static final Option<String> CACHE_REDIS_PASSWORD = new OptionBuilder<>(CACHE_REDIS_PASSWORD_PROPERTY, String.class)
+            .category(OptionCategory.CACHE)
+            .description("The password for Redis authentication. Required if the Redis server requires authentication.")
+            .build();
+
+    public static final Option<Integer> CACHE_REDIS_DATABASE = new OptionBuilder<>(CACHE_REDIS_DATABASE_PROPERTY, Integer.class)
+            .category(OptionCategory.CACHE)
+            .description("The Redis database number to use (0-15).")
+            .defaultValue(0)
+            .build();
+
+    public static final Option<Integer> CACHE_REDIS_TIMEOUT = new OptionBuilder<>(CACHE_REDIS_TIMEOUT_PROPERTY, Integer.class)
+            .category(OptionCategory.CACHE)
+            .description("The Redis command timeout in milliseconds, applied per command. This is the fail-fast "
+                    + "window when Redis is unreachable: a single command errors after this long instead of "
+                    + "hanging. Note that one request can issue several cache commands, so its worst-case stall "
+                    + "is a multiple of this value; lower it for tighter tail latency during a Redis outage.")
+            .defaultValue(1000)
+            .build();
+
+    public static final Option<Integer> CACHE_REDIS_MAX_POOL_SIZE = new OptionBuilder<>(CACHE_REDIS_MAX_POOL_SIZE_PROPERTY, Integer.class)
+            .category(OptionCategory.CACHE)
+            .description("The maximum number of connections in the Redis connection pool.")
+            .defaultValue(64)
+            .build();
+
+    public static final Option<Integer> CACHE_REDIS_MIN_IDLE = new OptionBuilder<>(CACHE_REDIS_MIN_IDLE_PROPERTY, Integer.class)
+            .category(OptionCategory.CACHE)
+            .description("The minimum number of idle connections maintained in the Redis connection pool.")
+            .defaultValue(8)
+            .build();
+
+    public static final Option<String> CACHE_REDIS_TLS_CA_FILE = new OptionBuilder<>(CACHE_REDIS_TLS_CA_FILE_PROPERTY, String.class)
+            .category(OptionCategory.CACHE)
+            .description("Path to a PEM file containing the certificate(s) of the CA that signed the Redis server certificate. "
+                    + "Only needed when the Redis server uses a private CA; managed Redis services with public CA chains do not need this.")
+            .build();
+
+    public static final Option<Boolean> CACHE_REDIS_TLS_VERIFY_HOSTNAME = new OptionBuilder<>(CACHE_REDIS_TLS_VERIFY_HOSTNAME_PROPERTY, Boolean.class)
+            .category(OptionCategory.CACHE)
+            .description("Whether to verify that the Redis server certificate's CN/SAN matches the connection hostname. "
+                    + "Enabled by default. Disable only as a temporary workaround for cert/DNS mismatches; the certificate chain is still validated.")
+            .defaultValue(Boolean.TRUE)
             .build();
 
     public static Option<Integer> maxCountOption(String cache) {

@@ -25,10 +25,11 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.models.cache.CacheCrlProvider;
 import org.keycloak.models.cache.CacheCrlProviderFactory;
+import org.keycloak.provider.EnvironmentDependentProviderFactory;
 
 import org.infinispan.Cache;
 
-public class InfinispanCacheCrlProviderFactory implements CacheCrlProviderFactory {
+public class InfinispanCacheCrlProviderFactory implements CacheCrlProviderFactory, EnvironmentDependentProviderFactory {
 
     public static final String PROVIDER_ID = "infinispan";
 
@@ -75,5 +76,10 @@ public class InfinispanCacheCrlProviderFactory implements CacheCrlProviderFactor
     @Override
     public String getId() {
         return PROVIDER_ID;
+    }
+
+    @Override
+    public boolean isSupported(Config.Scope config) {
+        return !"redis".equals(config.root().get("cache"));
     }
 }

@@ -1,0 +1,13 @@
+# Local validation scrape config. Short interval so failover/outage bands are visible.
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: keycloak
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['keycloak:9000']
+  - job_name: redis
+    static_configs:
+      - targets: ['redis-exporter:9121']

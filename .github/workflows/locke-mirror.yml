@@ -1,0 +1,45 @@
+# Locke: mirror already-published GHCR images to Quay and Docker Hub.
+# The release pipeline (locke-release.yml) mirrors on each new tag; this one-off,
+# manually-dispatched job copies existing tags so all three registries match. Uses
+# skopeo (manifest-preserving copy, no rebuild). Source GHCR package is public.
+name: locke-mirror
+
+on:
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: "Space-separated tags to mirror from GHCR to Quay + Docker Hub"
+        required: true
+        default: "26.3.5-2 26.3.5-3 26.6.1-1 26.6.1-2 26.6.2-1 26.6.2-2 latest"
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    if: github.repository == 'sky-cloak/locke'
+    runs-on: ubuntu-latest
+    env:
+      SRC: ghcr.io/sky-cloak/locke
+      QUAY_DEST: quay.io/skycloak/locke
+      DOCKERHUB_DEST: docker.io/skycloak/locke
+      QUAY_USER: ${{ secrets.QUAY_USERNAME }}
+      QUAY_TOKEN: ${{ secrets.QUAY_TOKEN }}
+      DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      TAGS: ${{ inputs.tags }}
+    steps:
+      - name: Install skopeo
+        run: sudo apt-get update && sudo apt-get install -y skopeo
+
+      - name: Mirror GHCR -> Quay + Docker Hub
+        run: |
+          set -euo pipefail
+          skopeo login quay.io   -u "$QUAY_USER"      --password "$QUAY_TOKEN"
+          skopeo login docker.io -u "$DOCKERHUB_USER" --password "$DOCKERHUB_TOKEN"
+          for t in $TAGS; do
+            echo "== mirroring ${t} =="
+            skopeo copy --all "docker://${SRC}:${t}" "docker://${QUAY_DEST}:${t}"
+            skopeo copy --all "docker://${SRC}:${t}" "docker://${DOCKERHUB_DEST}:${t}"
+          done
+          echo "Mirrored: $TAGS"

@@ -47,6 +47,7 @@ import org.keycloak.models.sessions.infinispan.remote.RemoteInfinispanAuthentica
 import org.keycloak.models.sessions.infinispan.remote.RemoteUserLoginFailureProviderFactory;
 import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.models.utils.PostMigrationEvent;
+import org.keycloak.provider.EnvironmentDependentProviderFactory;
 import org.keycloak.provider.InvalidationHandler.ObjectType;
 import org.keycloak.provider.Provider;
 import org.keycloak.provider.ProviderEvent;
@@ -87,7 +88,7 @@ import static org.keycloak.models.cache.infinispan.InfinispanCacheRealmProviderF
 /**
  * @author <a href="mailto:sthorger@redhat.com">Stian Thorgersen</a>
  */
-public class DefaultInfinispanConnectionProviderFactory implements InfinispanConnectionProviderFactory, ProviderEventListener, ServerInfoAwareProviderFactory {
+public class DefaultInfinispanConnectionProviderFactory implements InfinispanConnectionProviderFactory, ProviderEventListener, ServerInfoAwareProviderFactory, EnvironmentDependentProviderFactory {
 
     private static final ReadWriteLock READ_WRITE_LOCK = new ReentrantReadWriteLock();
     private static final Logger logger = Logger.getLogger(DefaultInfinispanConnectionProviderFactory.class);
@@ -281,18 +282,23 @@ public class DefaultInfinispanConnectionProviderFactory implements InfinispanCon
     private void registerSystemWideListeners(KeycloakSession session) {
         KeycloakSessionFactory sessionFactory = session.getKeycloakSessionFactory();
         ClusterProvider cluster = session.getProvider(ClusterProvider.class);
-        cluster.registerListener(REALM_CLEAR_CACHE_EVENTS, (ClusterEvent event) -> {
-            if (event instanceof ClearCacheEvent) {
-                sessionFactory.invalidate(null, ObjectType._ALL_);
-            }
-        });
-        cluster.registerListener(REALM_INVALIDATION_EVENTS, (ClusterEvent event) -> {
-            if (event instanceof RealmUpdatedEvent rr) {
-                sessionFactory.invalidate(null, ObjectType.REALM, rr.getId());
-            } else if (event instanceof RealmRemovedEvent rr) {
-                sessionFactory.invalidate(null, ObjectType.REALM, rr.getId());
-            }
-        });
+        if (cluster != null) {
+            cluster.registerListener(REALM_CLEAR_CACHE_EVENTS, (ClusterEvent event) -> {
+                if (event instanceof ClearCacheEvent) {
+                    sessionFactory.invalidate(null, ObjectType._ALL_);
+                }
+            });
+            cluster.registerListener(REALM_INVALIDATION_EVENTS, (ClusterEvent event) -> {
+                if (event instanceof RealmUpdatedEvent rr) {
+                    sessionFactory.invalidate(null, ObjectType.REALM, rr.getId());
+                } else if (event instanceof RealmRemovedEvent rr) {
+                    sessionFactory.invalidate(null, ObjectType.REALM, rr.getId());
+                }
+            });
+            logger.debug("Registered system-wide cluster listeners");
+        } else {
+            logger.debug("ClusterProvider not available, skipping system-wide listener registration");
+        }
     }
 
     private void injectKeycloakTimeService(EmbeddedCacheManager cacheManager) {
@@ -350,5 +356,10 @@ public class DefaultInfinispanConnectionProviderFactory implements InfinispanCon
 
     private void addRemoteOperationalInfo(Map<String, String> info) {
         info.put("connectionCount", Integer.toString(remoteCacheManager.getConnectionCount()));
+    }
+
+    @Override
+    public boolean isSupported(Config.Scope config) {
+        return !"redis".equals(config.root().get("cache"));
     }
 }

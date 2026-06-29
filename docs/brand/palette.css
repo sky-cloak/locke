@@ -1,0 +1,14 @@
+/* Locke · palette tokens */
+:root {
+  --locke-ink:   #252272; /* primary · deep indigo */
+  --locke-paper: #f5f1ea; /* canvas · warm cream */
+
+  /* Accents — use sparingly, never two at once. Reserved for premium / stamped surfaces. */
+  --locke-brass: #b88a3e; /* hardware nod */
+  --locke-coral: #c0563f; /* warm product accent */
+  --locke-sage:  #5d7a5a; /* organic, calm */
+
+  /* Dark-mode adjustments */
+  --locke-ink-dark:   #a5a3e8; /* light indigo on dark bg */
+  --locke-paper-dark: #0f0e2e; /* deep indigo bg */
+}
