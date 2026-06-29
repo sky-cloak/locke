@@ -31,11 +31,15 @@ public class RedisClusterTopologyRefreshTest {
 
     @Test
     public void topologyRefreshIsConfiguredForResilience() {
-        ClusterTopologyRefreshOptions opts = RedisClientManager.buildClusterTopologyRefreshOptions();
+        ClusterTopologyRefreshOptions opts = RedisClientManager.buildClusterTopologyRefreshOptions(30);
 
         assertThat("periodic refresh must be on so slot moves are picked up",
                 opts.isPeriodicRefreshEnabled(), is(true));
         assertThat(opts.getRefreshPeriod(), is(Duration.ofSeconds(30)));
+
+        // tunable: a lower cadence yields faster failover re-route
+        assertThat(RedisClientManager.buildClusterTopologyRefreshOptions(5).getRefreshPeriod(),
+                is(Duration.ofSeconds(5)));
 
         assertThat("adaptive triggers (MOVED/ASK/reconnect/uncovered-slot) must fire refresh on failover",
                 opts.getAdaptiveRefreshTriggers().size(), is(greaterThan(0)));

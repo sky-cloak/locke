@@ -50,6 +50,20 @@ public class RedissonClientFactory {
      * @return Redisson client instance
      */
     public static RedissonClient createClient(RedisConnectionConfig config) {
+        Config redissonConfig = buildRedissonConfig(config);
+        try {
+            RedissonClient client = Redisson.create(redissonConfig);
+            logger.info("Redisson client created successfully");
+            return client;
+        } catch (Exception e) {
+            logger.errorf(e, "Failed to create Redisson client");
+            throw new RuntimeException("Failed to create Redisson client", e);
+        }
+    }
+
+    // Builds the Redisson Config graph without connecting — a testable seam. The CLUSTER branch
+    // pins readMode/subscriptionMode to MASTER (Redisson is used only for master-side primitives).
+    static Config buildRedissonConfig(RedisConnectionConfig config) {
         Config redissonConfig = new Config();
         String scheme = config.isSslEnabled() ? "rediss://" : "redis://";
 
@@ -107,6 +121,13 @@ public class RedissonClientFactory {
                 org.redisson.config.ClusterServersConfig cluster = redissonConfig.useClusterServers()
                         .setUsername(config.getUsername())
                         .setPassword(config.getPassword())
+                        // Locke uses Redisson only for master-side primitives (locks, pub/sub, the
+                        // startup coordination map) — never replica reads. Default cluster readMode
+                        // is SLAVE, which opens replica connections and emits READONLY; some managed
+                        // Redis (e.g. Azure Managed Redis OSS policy) reject READONLY and fail the
+                        // client. Pin both to MASTER: no replica connections, no READONLY, no loss.
+                        .setReadMode(org.redisson.config.ReadMode.MASTER)
+                        .setSubscriptionMode(org.redisson.config.SubscriptionMode.MASTER)
                         .setMasterConnectionPoolSize(config.getPoolMaxSize())
                         .setMasterConnectionMinimumIdleSize(config.getPoolMinSize())
                         .setTimeout((int) config.getTimeout().toMillis())
@@ -133,15 +154,7 @@ public class RedissonClientFactory {
         redissonConfig.setCodec(new org.redisson.codec.SerializationCodec());
         redissonConfig.setThreads(16); // Default thread pool size
         redissonConfig.setNettyThreads(32); // Default netty thread pool
-
-        try {
-            RedissonClient client = Redisson.create(redissonConfig);
-            logger.info("Redisson client created successfully");
-            return client;
-        } catch (Exception e) {
-            logger.errorf(e, "Failed to create Redisson client");
-            throw new RuntimeException("Failed to create Redisson client", e);
-        }
+        return redissonConfig;
     }
 
     /**

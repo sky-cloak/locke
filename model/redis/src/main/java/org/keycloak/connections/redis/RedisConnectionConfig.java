@@ -72,6 +72,10 @@ public class RedisConnectionConfig {
     private final int retryAttempts;
     private final Duration retryDelay;
 
+    // Cluster topology refresh cadence (failover re-route backstop; adaptive triggers handle
+    // the fast path). Lower = faster recovery from a shard failover, more CLUSTER NODES traffic.
+    private final int topologyRefreshSeconds;
+
     private RedisConnectionConfig(Builder builder) {
         this.mode = builder.mode;
         this.hosts = builder.hosts;
@@ -87,6 +91,11 @@ public class RedisConnectionConfig {
         this.timeout = builder.timeout;
         this.retryAttempts = builder.retryAttempts;
         this.retryDelay = builder.retryDelay;
+        this.topologyRefreshSeconds = builder.topologyRefreshSeconds;
+    }
+
+    public int getTopologyRefreshSeconds() {
+        return topologyRefreshSeconds;
     }
 
     /**
@@ -340,6 +349,12 @@ public class RedisConnectionConfig {
         private Duration timeout = Duration.ofMillis(1000);
         private int retryAttempts = 3;
         private Duration retryDelay = Duration.ofMillis(100);
+        private int topologyRefreshSeconds = 30;
+
+        public Builder topologyRefreshSeconds(int topologyRefreshSeconds) {
+            this.topologyRefreshSeconds = topologyRefreshSeconds;
+            return this;
+        }
 
         public Builder mode(Mode mode) {
             this.mode = mode;

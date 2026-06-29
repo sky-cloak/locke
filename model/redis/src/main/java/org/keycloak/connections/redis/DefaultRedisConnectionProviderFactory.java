@@ -207,6 +207,47 @@ public class DefaultRedisConnectionProviderFactory
         }
     }
 
+    // Max connections in the Lettuce pool. High-latency backends (managed Redis reached over the
+    // network) need a larger pool to sustain throughput: required concurrency ~= ops/sec * per-op
+    // latency, so a pool sized for sub-millisecond co-located Redis starves once each op costs tens
+    // of ms. Returns null when unset so the caller keeps the parsed default.
+    Integer resolvePoolSize() {
+        return resolvePositiveInt(
+                resolveString("max-pool-size", "kc.cache-redis-max-pool-size", "KC_CACHE_REDIS_MAX_POOL_SIZE"),
+                "KC_CACHE_REDIS_MAX_POOL_SIZE");
+    }
+
+    // Minimum idle (pre-warmed) connections. Worth raising alongside the max for high-latency
+    // backends so a traffic burst doesn't pay connection-setup (and TLS handshake) latency.
+    Integer resolveMinIdle() {
+        return resolvePositiveInt(
+                resolveString("min-idle", "kc.cache-redis-min-idle", "KC_CACHE_REDIS_MIN_IDLE"),
+                "KC_CACHE_REDIS_MIN_IDLE");
+    }
+
+    // Cluster topology-refresh cadence (seconds). Lower = faster failover re-route. Null → keep default (30).
+    Integer resolveTopologyRefreshSeconds() {
+        return resolvePositiveInt(
+                resolveString("topology-refresh-seconds", "kc.cache-redis-topology-refresh-seconds",
+                        "KC_CACHE_REDIS_TOPOLOGY_REFRESH_SECONDS"),
+                "KC_CACHE_REDIS_TOPOLOGY_REFRESH_SECONDS");
+    }
+
+    private static Integer resolvePositiveInt(String raw, String label) {
+        if (raw == null) {
+            return null;
+        }
+        try {
+            int v = Integer.parseInt(raw.trim());
+            if (v <= 0) {
+                throw new NumberFormatException("must be > 0");
+            }
+            return v;
+        } catch (NumberFormatException e) {
+            throw new RuntimeException(label + " must be a positive integer, got: " + raw, e);
+        }
+    }
+
     private String resolveString(String spiKey, String sysProp, String envVar) {
         String spi = config.get(spiKey);
         if (spi != null && !spi.isBlank()) {
@@ -243,6 +284,9 @@ public class DefaultRedisConnectionProviderFactory
         String tlsCaFile = resolveTlsCaFile();
         boolean tlsVerifyHostname = resolveTlsVerifyHostname();
         Integer timeoutMillis = resolveTimeoutMillis();
+        Integer poolSize = resolvePoolSize();
+        Integer minIdle = resolveMinIdle();
+        Integer topologyRefresh = resolveTopologyRefreshSeconds();
 
         // TLS-knob / scheme consistency check. tlsVerifyHostname is true by default; treat the
         // explicit `false` opt-out as a "user clearly set this" signal.
@@ -279,6 +323,9 @@ public class DefaultRedisConnectionProviderFactory
                 .tlsCaFile(tlsCaFile)
                 .tlsVerifyHostname(tlsVerifyHostname)
                 .timeout(timeoutMillis != null ? Duration.ofMillis(timeoutMillis) : parsed.getTimeout())
+                .poolMinSize(minIdle != null ? minIdle : parsed.getPoolMinSize())
+                .poolMaxSize(poolSize != null ? poolSize : parsed.getPoolMaxSize())
+                .topologyRefreshSeconds(topologyRefresh != null ? topologyRefresh : parsed.getTopologyRefreshSeconds())
                 .build();
     }
 

@@ -154,4 +154,23 @@ public class RedissonSslConfigTest {
         }
         assertThat(ks.size(), is(equalTo(1)));
     }
+
+    @Test
+    public void clusterReadAndSubscriptionModeAreMaster() {
+        // Redisson is used only for master-side primitives (locks, pub/sub, the startup map).
+        // The cluster config must pin readMode/subscriptionMode to MASTER so it never opens replica
+        // connections / emits READONLY — which AMR's OSS clustering policy rejects.
+        RedisConnectionConfig conn = new RedisConnectionConfig.Builder()
+                .mode(RedisConnectionConfig.Mode.CLUSTER)
+                .addHost("h1", 6379)
+                .addHost("h2", 6379)
+                .build();
+
+        Config c = RedissonClientFactory.buildRedissonConfig(conn);
+
+        // useClusterServers() returns the already-built cluster config (public accessor).
+        org.redisson.config.ClusterServersConfig cs = c.useClusterServers();
+        assertThat(cs.getReadMode(), is(org.redisson.config.ReadMode.MASTER));
+        assertThat(cs.getSubscriptionMode(), is(org.redisson.config.SubscriptionMode.MASTER));
+    }
 }
