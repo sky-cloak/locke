@@ -8,6 +8,20 @@ the Percona Server / Amazon Corretto convention.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [26.6.4-1] - 2026-06-29
+
+Rebased onto upstream Keycloak 26.6.4 (a patch release). Also lands the Redis cluster
+hardening that was pending since 26.6.3-3.
+
+### Added
+- Redis cluster: Redisson `readMode`/`subscriptionMode` pinned to `MASTER`, so Locke connects
+  to Azure Managed Redis with the OSS clustering policy (which rejects `READONLY`) and any
+  strict OSS cluster. Adds a configurable cluster topology-refresh cadence (default 30s) and
+  explicit connection-pool sizing.
+
+### Changed
+- Built from Keycloak 26.6.4 (was 26.6.3).
+
 ## [26.6.3-3] - 2026-06-24
 
 ### Fixed
