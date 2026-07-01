@@ -47,3 +47,20 @@ changes.
 AWS-managed Redis. "Cluster mode enabled" is a Cluster (sharded, configuration
 endpoint). "Cluster mode disabled" is replication behind a primary endpoint that AWS
 repoints on failover. Engine-compatible with self-hosted Sentinel / Cluster.
+
+## Cache backend parity
+
+### Functional parity
+Every Keycloak feature must keep working under `KC_CACHE=redis`, not only the ones with a
+Redis-native cache. A provider may be disabled under redis only if another implementation of
+the same SPI stays enabled: a Redis-native one, or a fallback such as a JPA-backed provider.
+A provider disabled under redis with nothing left to serve the SPI is a parity break, its
+`getProvider(...)` returns null and the feature fails (this is what broke external-IdP
+brokering). Enforced by a coverage test, not a hand-maintained list. See docs/adr/0004.
+
+### Cacheless (upstream)
+An experimental upstream Keycloak direction that stores volatile session data in the database
+and drops the distributed cache entirely, for DB-only operational simplicity. Distinct from
+Locke's Redis backend, which keeps a cache for performance and resilience. Kept separate here
+so "Locke's Redis mode" and "upstream cacheless mode" are never conflated in docs or
+positioning.
