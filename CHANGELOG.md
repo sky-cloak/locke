@@ -8,6 +8,15 @@ the Percona Server / Amazon Corretto convention.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [26.6.4-2] - 2026-07-01
+
+### Fixed
+- External identity-provider brokering (OIDC/SAML) and X.509 CRL revocation now work under
+  `KC_CACHE=redis`. The Infinispan `PublicKeyStorageProvider` and `CrlStorageProvider` were
+  disabled under redis with no replacement, so `getProvider(...)` returned null and external
+  token/signature verification failed. Adds Redis-mode providers on a per-node cache.
+  Reported in #22 / #40; see `docs/adr/0004`.
+
 ## [26.6.4-1] - 2026-06-29
 
 Rebased onto upstream Keycloak 26.6.4 (a patch release). Also lands the Redis cluster
