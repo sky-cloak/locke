@@ -101,14 +101,15 @@ public class RedisRootAuthenticationSessionAdapter implements RootAuthentication
         authSessionEntity.setTimestamp(timestamp);
 
         Map<String, RedisAuthenticationSessionEntity> authSessions = entity.getAuthenticationSessions();
+        String evictedTabId = null;
         if (authSessions.size() >= authSessionsLimit) {
-            String oldestTabId = authSessions.entrySet().stream()
+            evictedTabId = authSessions.entrySet().stream()
                     .min(TIMESTAMP_COMPARATOR)
                     .map(Map.Entry::getKey)
                     .orElse(null);
-            if (oldestTabId != null) {
-                log.debugf("Reached limit (%s) of active authentication sessions. Removing oldest with TabId %s.", authSessionsLimit, oldestTabId);
-                authSessions.remove(oldestTabId);
+            if (evictedTabId != null) {
+                log.debugf("Reached limit (%s) of active authentication sessions. Removing oldest with TabId %s.", authSessionsLimit, evictedTabId);
+                authSessions.remove(evictedTabId);
             }
         }
 
@@ -118,6 +119,10 @@ public class RedisRootAuthenticationSessionAdapter implements RootAuthentication
         // call (1 round-trip) instead of two separate HSETs — bench showed splitting this
         // into persistTab + persistTimestamp doubled the RT count and regressed RPS.
         provider.persistRootAuthSession(realm, entity);
+        if (evictedTabId != null) {
+            // HSET above cannot delete the evicted tab's field; HDEL it explicitly.
+            provider.removeTab(realm, entity.getId(), evictedTabId);
+        }
 
         AuthenticationSessionModel authSession = new RedisAuthenticationSessionAdapter(session, this, tabId, authSessionEntity);
         session.getContext().setAuthenticationSession(authSession);
@@ -130,10 +135,11 @@ public class RedisRootAuthenticationSessionAdapter implements RootAuthentication
             if (entity.getAuthenticationSessions().isEmpty()) {
                 provider.removeRootAuthenticationSession(realm, this);
             } else {
-                entity.setTimestamp(Time.currentTime());
-                // 1-RT whole-entity rewrite. The HDEL+HSET split was a 2-RT regression.
-                // We accept that we re-serialize remaining tabs; the typical case has 1.
-                provider.persistRootAuthSession(realm, entity);
+                // Must HDEL the tab field — an HSET-only rewrite leaves the removed
+                // tab in the hash and it resurrects on the next load.
+                int timestamp = Time.currentTime();
+                entity.setTimestamp(timestamp);
+                provider.removeTabCollapsingEmptyRoot(realm, entity.getId(), tabId, timestamp);
             }
         }
     }

@@ -1,8 +1,10 @@
 package org.keycloak.models.sessions.redis;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
@@ -17,6 +19,7 @@ import org.keycloak.models.UserModel;
 import org.keycloak.models.UserSessionModel;
 import org.keycloak.models.UserSessionProvider;
 import org.keycloak.models.session.UserSessionPersisterProvider;
+import org.keycloak.models.utils.SessionExpirationUtils;
 
 /**
  * Redis user session provider that delegates to JPA persistent sessions.
@@ -34,6 +37,8 @@ public class RedisUserSessionProvider implements UserSessionProvider {
 
     private final KeycloakSession session;
     private final int startupTime;
+    // Transient sessions live only as long as this provider (= one request), like upstream.
+    private final Map<String, UserSessionModel> transientUserSessions = new HashMap<>();
 
     public RedisUserSessionProvider(KeycloakSession session) {
         this.session = session;
@@ -64,15 +69,64 @@ public class RedisUserSessionProvider implements UserSessionProvider {
             clientSession.setNote(AuthenticatedClientSessionModel.USER_SESSION_REMEMBER_ME_NOTE, "true");
         }
 
+        if (userSession.getPersistenceState() == UserSessionModel.SessionPersistenceState.TRANSIENT) {
+            // Transient sessions must never touch the persister; keep the client session
+            // in memory on the user session for the lifetime of this request.
+            userSession.getAuthenticatedClientSessions().put(client.getId(), clientSession);
+            return clientSession;
+        }
+
         boolean offline = userSession.isOffline();
         persister().createClientSession(clientSession, offline);
         AuthenticatedClientSessionModel loaded = persister().loadClientSession(realm, client, userSession, offline);
-        return loaded != null ? new AutoPersistingClientSessionAdapter(loaded, persister(), offline) : null;
+        if (loaded == null) {
+            return null;
+        }
+        AuthenticatedClientSessionModel adapter = new AutoPersistingClientSessionAdapter(loaded, persister(), offline);
+        // The persister adapter latches its client-session map on first read (the
+        // existing-check above), so register the new session there too or later reads
+        // through this user session model won't see it.
+        userSession.getAuthenticatedClientSessions().put(client.getId(), adapter);
+        return adapter;
     }
 
     @Override
     public AuthenticatedClientSessionModel getClientSession(UserSessionModel userSession, ClientModel client, boolean offline) {
-        return userSession.getAuthenticatedClientSessionByClient(client.getId());
+        if (userSession.getPersistenceState() == UserSessionModel.SessionPersistenceState.TRANSIENT) {
+            // Look up via this provider's registry, not the (possibly long-lived) model
+            // object — transient sessions must not be visible outside their request.
+            UserSessionModel local = transientUserSessions.get(userSession.getId());
+            return local == null ? null : local.getAuthenticatedClientSessionByClient(client.getId());
+        }
+        AuthenticatedClientSessionModel clientSession = userSession.getAuthenticatedClientSessionByClient(client.getId());
+        if (clientSession == null || isClientSessionExpired(client.getRealm(), client, userSession, clientSession, offline)) {
+            return null;
+        }
+        return clientSession;
+    }
+
+    // The persister loads client sessions unfiltered, so expiration is checked here
+    // (upstream does this via cache expiration in the Infinispan layer).
+    private static boolean isClientSessionExpired(RealmModel realm, ClientModel client, UserSessionModel userSession,
+                                                  AuthenticatedClientSessionModel clientSession, boolean offline) {
+        long now = Time.currentTimeMillis();
+        boolean rememberMe = userSession.isRememberMe();
+        long idleTimestamp = SessionExpirationUtils.calculateClientSessionIdleTimestamp(
+                offline, rememberMe, TimeUnit.SECONDS.toMillis(clientSession.getTimestamp()), realm, client);
+        if (idleTimestamp < now) {
+            return true;
+        }
+        long started = clientSession.getTimestamp();
+        String startedNote = clientSession.getNote(AuthenticatedClientSessionModel.STARTED_AT_NOTE);
+        if (startedNote != null) {
+            try {
+                started = Long.parseLong(startedNote);
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        long lifespanTimestamp = SessionExpirationUtils.calculateClientSessionMaxLifespanTimestamp(
+                offline, rememberMe, TimeUnit.SECONDS.toMillis(started), TimeUnit.SECONDS.toMillis(userSession.getStarted()), realm, client);
+        return lifespanTimestamp > 0 && lifespanTimestamp < now;
     }
 
     @Override
@@ -85,7 +139,9 @@ public class RedisUserSessionProvider implements UserSessionProvider {
         }
 
         if (persistenceState == UserSessionModel.SessionPersistenceState.TRANSIENT) {
-            return new TransientUserSessionModel(id, realm, user, loginUsername, ipAddress, authMethod, rememberMe, brokerSessionId, brokerUserId);
+            UserSessionModel userSession = new TransientUserSessionModel(id, realm, user, loginUsername, ipAddress, authMethod, rememberMe, brokerSessionId, brokerUserId);
+            transientUserSessions.put(id, userSession);
+            return userSession;
         }
 
         // Create a persistent user session via the persister
@@ -96,6 +152,10 @@ public class RedisUserSessionProvider implements UserSessionProvider {
 
     @Override
     public UserSessionModel getUserSession(RealmModel realm, String id) {
+        UserSessionModel transientSession = transientUserSessions.get(id);
+        if (transientSession != null && transientSession.getRealm().getId().equals(realm.getId())) {
+            return transientSession;
+        }
         return persister().loadUserSession(realm, id, false);
     }
 
@@ -120,7 +180,7 @@ public class RedisUserSessionProvider implements UserSessionProvider {
     public UserSessionModel getUserSessionWithPredicate(RealmModel realm, String id, boolean offline, Predicate<UserSessionModel> predicate) {
         UserSessionModel userSession = offline
                 ? persister().loadUserSession(realm, id, true)
-                : persister().loadUserSession(realm, id, false);
+                : getUserSession(realm, id);
         if (userSession != null && predicate.test(userSession)) {
             return userSession;
         }
@@ -139,6 +199,10 @@ public class RedisUserSessionProvider implements UserSessionProvider {
 
     @Override
     public void removeUserSession(RealmModel realm, UserSessionModel session) {
+        if (session.getPersistenceState() == UserSessionModel.SessionPersistenceState.TRANSIENT) {
+            transientUserSessions.remove(session.getId());
+            return;
+        }
         persister().removeUserSession(session.getId(), false);
     }
 
@@ -182,8 +246,13 @@ public class RedisUserSessionProvider implements UserSessionProvider {
     public AuthenticatedClientSessionModel createOfflineClientSession(AuthenticatedClientSessionModel clientSession,
                                                                        UserSessionModel offlineUserSession) {
         persister().createClientSession(clientSession, true);
-        return persister().loadClientSession(offlineUserSession.getRealm(),
+        AuthenticatedClientSessionModel loaded = persister().loadClientSession(offlineUserSession.getRealm(),
                 clientSession.getClient(), offlineUserSession, true);
+        if (loaded != null) {
+            // Same latched-map refresh as in createClientSession.
+            offlineUserSession.getAuthenticatedClientSessions().put(clientSession.getClient().getId(), loaded);
+        }
+        return loaded;
     }
 
     @Override
@@ -319,13 +388,45 @@ public class RedisUserSessionProvider implements UserSessionProvider {
     }
 
     /**
-     * Transient user session that is never persisted. Used for service accounts and similar.
+     * Transient user session that is never persisted. Used for service accounts
+     * (client_credentials) and similar. Notes, state and client sessions are held
+     * in memory so protocol mappers and token endpoints can read back what they
+     * wrote during the request.
      */
     private static class TransientUserSessionModel extends PersistableUserSession {
+        private final Map<String, AuthenticatedClientSessionModel> clientSessions = new HashMap<>();
+        private final Map<String, String> notes = new HashMap<>();
+        private State state = State.LOGGED_IN;
+        private int lastSessionRefresh;
+
         TransientUserSessionModel(String id, RealmModel realm, UserModel user, String loginUsername,
                                     String ipAddress, String authMethod, boolean rememberMe,
                                     String brokerSessionId, String brokerUserId) {
             super(id, realm, user, loginUsername, ipAddress, authMethod, rememberMe, brokerSessionId, brokerUserId);
+            this.lastSessionRefresh = getStarted();
         }
+
+        @Override public SessionPersistenceState getPersistenceState() { return SessionPersistenceState.TRANSIENT; }
+        @Override public int getLastSessionRefresh() { return lastSessionRefresh; }
+        @Override public void setLastSessionRefresh(int seconds) { this.lastSessionRefresh = seconds; }
+        @Override public Map<String, AuthenticatedClientSessionModel> getAuthenticatedClientSessions() { return clientSessions; }
+        @Override public AuthenticatedClientSessionModel getAuthenticatedClientSessionByClient(String clientUUID) { return clientSessions.get(clientUUID); }
+        @Override public void removeAuthenticatedClientSessions(Collection<String> removedClientUUIDs) {
+            if (removedClientUUIDs != null) {
+                removedClientUUIDs.forEach(clientSessions::remove);
+            }
+        }
+        @Override public String getNote(String name) { return notes.get(name); }
+        @Override public void setNote(String name, String value) {
+            if (value == null) {
+                notes.remove(name);
+            } else {
+                notes.put(name, value);
+            }
+        }
+        @Override public void removeNote(String name) { notes.remove(name); }
+        @Override public Map<String, String> getNotes() { return notes; }
+        @Override public State getState() { return state; }
+        @Override public void setState(State state) { this.state = state; }
     }
 }
