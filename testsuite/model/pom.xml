@@ -247,13 +247,15 @@
                     cross-site propagation through embedded Infinispan caches.
                   - UserSessionPersisterProviderTest#testClientTimestampUpdate, #testUserRemoved,
                     #testUserSessionRememberMeMigration: read Infinispan caches directly;
-                    #testMigrateSession: casts to PersistentUserSessionProvider.
+                    #testMigrateSession: casts to PersistentUserSessionProvider;
+                    #testExpirationDistribution, #testExpirationTaskFrequency: Infinispan
+                    task-distribution mechanics; Locke sweeps via its own redis-leased timer.
                   - UserSessionProviderOfflineModelTest#testOfflineClientSessionLoading,
                     #testLoadingOfflineClientSessionWhenCreatedBeforeSessionTime,
                     #testOfflineSessionLazyLoadingPropagationBetweenNodes: seed/inspect
                     Infinispan offline-session caches directly.
                 -->
-                <test>!org.keycloak.testsuite.model.session.AuthenticationSessionTest#testRemoveExpiredAuthSessions+testRemoveAfterCreation, !org.keycloak.testsuite.model.session.OfflineSessionPersistenceTest#testOfflineSessionLoadingAfterCacheRemoval, !org.keycloak.testsuite.model.session.UserSessionExpirationTest#testExpirationEvents, !org.keycloak.testsuite.model.session.UserSessionInitializerTest#testUserSessionPropagationBetweenSites, !org.keycloak.testsuite.model.session.UserSessionPersisterProviderTest#testClientTimestampUpdate+testMigrateSession+testUserRemoved+testUserSessionRememberMeMigration, !org.keycloak.testsuite.model.session.UserSessionProviderOfflineModelTest#testOfflineClientSessionLoading+testLoadingOfflineClientSessionWhenCreatedBeforeSessionTime+testOfflineSessionLazyLoadingPropagationBetweenNodes</test>
+                <test>!org.keycloak.testsuite.model.session.AuthenticationSessionTest#testRemoveExpiredAuthSessions+testRemoveAfterCreation, !org.keycloak.testsuite.model.session.OfflineSessionPersistenceTest#testOfflineSessionLoadingAfterCacheRemoval, !org.keycloak.testsuite.model.session.UserSessionExpirationTest#testExpirationEvents, !org.keycloak.testsuite.model.session.UserSessionInitializerTest#testUserSessionPropagationBetweenSites, !org.keycloak.testsuite.model.session.UserSessionPersisterProviderTest#testClientTimestampUpdate+testExpirationDistribution+testExpirationTaskFrequency+testMigrateSession+testUserRemoved+testUserSessionRememberMeMigration, !org.keycloak.testsuite.model.session.UserSessionProviderOfflineModelTest#testOfflineClientSessionLoading+testLoadingOfflineClientSessionWhenCreatedBeforeSessionTime+testOfflineSessionLazyLoadingPropagationBetweenNodes</test>
             </properties>
         </profile>
 

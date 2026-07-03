@@ -19,7 +19,6 @@ package org.keycloak.models.sessions.infinispan.expiration;
 
 import java.time.Duration;
 import java.util.Optional;
-import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 
 import org.keycloak.Config;
@@ -74,16 +73,6 @@ public final class ExpirationTaskFactory {
      */
     public static ExpirationTask create(KeycloakSession session, int expirationTaskPeriodSeconds, Consumer<Duration> onTaskExecuted) {
         var connectionProvider = session.getProvider(InfinispanConnectionProvider.class);
-        if (connectionProvider == null) {
-            // No Infinispan connection (e.g. non-Infinispan cache backend): plain local task
-            // with a dedicated daemon scheduler.
-            var localScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-                Thread t = new Thread(r, "user-session-expiration-scheduler");
-                t.setDaemon(true);
-                return t;
-            });
-            return new LocalExpirationTask(session.getKeycloakSessionFactory(), localScheduler, expirationTaskPeriodSeconds, onTaskExecuted);
-        }
         var schedulerExecutor = connectionProvider.getScheduledExecutor();
 
         if (InfinispanUtils.isEmbeddedInfinispan()) {
@@ -137,14 +126,10 @@ public final class ExpirationTaskFactory {
 
     private static Optional<BaseExpirationTask> getEventTask(KeycloakSession session) {
         ProviderFactory<UserSessionProvider> provider = session.getKeycloakSessionFactory().getProviderFactory(UserSessionProvider.class);
-        ExpirationTask task;
-        if (provider instanceof InfinispanUserSessionProviderFactory iuspf) {
-            task = iuspf.getExpirationTask();
-        } else if (provider instanceof ExpirationTaskHolder holder) {
-            task = holder.getExpirationTask();
-        } else {
+        if (!(provider instanceof InfinispanUserSessionProviderFactory iuspf)) {
             return Optional.empty();
         }
+        ExpirationTask task = iuspf.getExpirationTask();
         if (!(task instanceof BaseExpirationTask bet)) {
             return Optional.empty();
         }

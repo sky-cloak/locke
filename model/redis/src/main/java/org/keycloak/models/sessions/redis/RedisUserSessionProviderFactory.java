@@ -9,8 +9,6 @@ import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.UserSessionProvider;
 import org.keycloak.models.UserSessionProviderFactory;
-import org.keycloak.models.sessions.infinispan.expiration.ExpirationTask;
-import org.keycloak.models.sessions.infinispan.expiration.ExpirationTaskHolder;
 import org.keycloak.provider.EnvironmentDependentProviderFactory;
 
 /**
@@ -21,8 +19,7 @@ import org.keycloak.provider.EnvironmentDependentProviderFactory;
  * without an intermediate Infinispan cache layer.
  */
 public class RedisUserSessionProviderFactory implements UserSessionProviderFactory<RedisUserSessionProvider>,
-                                                         EnvironmentDependentProviderFactory,
-                                                         ExpirationTaskHolder {
+                                                         EnvironmentDependentProviderFactory {
 
     // Same key and default as upstream's user-session SPI config.
     private static final String CONFIG_EXPIRATION_PERIOD = "sessionExpirationPeriod";
@@ -30,7 +27,7 @@ public class RedisUserSessionProviderFactory implements UserSessionProviderFacto
 
     private final String nodeId = UUID.randomUUID().toString();
     private int expirationPeriodSeconds = DEFAULT_EXPIRATION_PERIOD_SECONDS;
-    private volatile ExpirationTask expirationTask;
+    private volatile RedisExpirationTask expirationTask;
 
     @Override
     public RedisUserSessionProvider create(KeycloakSession session) {
@@ -57,8 +54,7 @@ public class RedisUserSessionProviderFactory implements UserSessionProviderFacto
         // expiration task, distributed across nodes via a per-realm Redis lease.
         try (KeycloakSession session = factory.create()) {
             RedisConnectionProvider redis = session.getProvider(RedisConnectionProvider.class);
-            expirationTask = new RedisExpirationTask(factory, redis.getScheduledExecutorService(),
-                    expirationPeriodSeconds, null,
+            expirationTask = new RedisExpirationTask(factory, expirationPeriodSeconds,
                     redis.getCache(RedisConnectionProvider.WORK_CACHE_NAME), nodeId);
         }
         expirationTask.start();
@@ -70,11 +66,6 @@ public class RedisUserSessionProviderFactory implements UserSessionProviderFacto
             expirationTask.stop();
             expirationTask = null;
         }
-    }
-
-    @Override
-    public ExpirationTask getExpirationTask() {
-        return expirationTask;
     }
 
     @Override
