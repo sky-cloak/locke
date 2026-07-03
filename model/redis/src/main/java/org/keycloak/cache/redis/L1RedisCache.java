@@ -64,6 +64,14 @@ public final class L1RedisCache<K, V> implements RedisCache<K, V> {
     /** Sentinel placed in L1 when L2 returned null, so we can short-circuit subsequent misses. */
     private static final Object NEGATIVE = new Object();
 
+    /**
+     * L1 entries carry the original key next to the value so {@link #entrySet()} /
+     * {@link #keySet()} can be answered from L1 for L1-only caches ({@link NoOpRedisCache}
+     * delegate) — the base64 L1 key is not reversible to {@code K}.
+     */
+    private record L1Entry<K, V>(K key, V value) {
+    }
+
     private final RedisCache<K, V> delegate;       // L2 (Lettuce/Redis)
     private final Cache<String, Object> l1;        // L1 (Caffeine; Object so we can store NEGATIVE sentinel)
     private final L1InvalidationBus bus;
@@ -117,15 +125,15 @@ public final class L1RedisCache<K, V> implements RedisCache<K, V> {
         // Single-flight: concurrent misses share one L2 lookup
         Object hit = l1.get(l1Key, k -> {
             V loaded = delegate.get(key);
-            return loaded != null ? loaded : NEGATIVE;
+            return loaded != null ? new L1Entry<>(key, loaded) : NEGATIVE;
         });
-        return hit == NEGATIVE ? null : (V) hit;
+        return hit == NEGATIVE ? null : ((L1Entry<K, V>) hit).value();
     }
 
     @Override
     public V put(K key, V value) {
         V old = delegate.put(key, value);
-        l1.put(keyFn.apply(key), value);
+        l1.put(keyFn.apply(key), new L1Entry<>(key, value));
         bus.publish(delegate.getName(), keyFn.apply(key));
         return old;
     }
@@ -133,7 +141,7 @@ public final class L1RedisCache<K, V> implements RedisCache<K, V> {
     @Override
     public V put(K key, V value, long ttl, TimeUnit unit) {
         V old = delegate.put(key, value, ttl, unit);
-        l1.put(keyFn.apply(key), value);
+        l1.put(keyFn.apply(key), new L1Entry<>(key, value));
         bus.publish(delegate.getName(), keyFn.apply(key));
         return old;
     }
@@ -142,7 +150,7 @@ public final class L1RedisCache<K, V> implements RedisCache<K, V> {
     public V putIfAbsent(K key, V value, long ttl, TimeUnit unit) {
         V existing = delegate.putIfAbsent(key, value, ttl, unit);
         if (existing == null) {
-            l1.put(keyFn.apply(key), value);
+            l1.put(keyFn.apply(key), new L1Entry<>(key, value));
             bus.publish(delegate.getName(), keyFn.apply(key));
         }
         return existing;
@@ -152,7 +160,7 @@ public final class L1RedisCache<K, V> implements RedisCache<K, V> {
     public V putIfAbsent(K key, V value) {
         V existing = delegate.putIfAbsent(key, value);
         if (existing == null) {
-            l1.put(keyFn.apply(key), value);
+            l1.put(keyFn.apply(key), new L1Entry<>(key, value));
             bus.publish(delegate.getName(), keyFn.apply(key));
         }
         return existing;
@@ -175,12 +183,16 @@ public final class L1RedisCache<K, V> implements RedisCache<K, V> {
 
     @Override
     public boolean containsKey(K key) {
-        if (l1.getIfPresent(keyFn.apply(key)) != null) return true;
+        Object hit = l1.getIfPresent(keyFn.apply(key));
+        if (hit != null) return hit != NEGATIVE;
         return delegate.containsKey(key);
     }
 
     @Override
     public long size() {
+        if (delegate instanceof NoOpRedisCache) {
+            return l1.asMap().values().stream().filter(v -> v != NEGATIVE).count();
+        }
         // L1 size isn't authoritative; defer to L2.
         return delegate.size();
     }
@@ -195,7 +207,7 @@ public final class L1RedisCache<K, V> implements RedisCache<K, V> {
             if (hit == NEGATIVE) {
                 continue;
             } else if (hit != null) {
-                result.put(k, (V) hit);
+                result.put(k, ((L1Entry<K, V>) hit).value());
             } else {
                 needFromL2.put(k, k);
             }
@@ -203,7 +215,7 @@ public final class L1RedisCache<K, V> implements RedisCache<K, V> {
         if (!needFromL2.isEmpty()) {
             Map<K, V> fromL2 = delegate.getAll(needFromL2.keySet());
             for (Map.Entry<K, V> e : fromL2.entrySet()) {
-                l1.put(keyFn.apply(e.getKey()), e.getValue());
+                l1.put(keyFn.apply(e.getKey()), new L1Entry<>(e.getKey(), e.getValue()));
                 result.put(e.getKey(), e.getValue());
             }
         }
@@ -215,7 +227,7 @@ public final class L1RedisCache<K, V> implements RedisCache<K, V> {
         delegate.putAll(entries);
         for (Map.Entry<K, V> e : entries.entrySet()) {
             String l1Key = keyFn.apply(e.getKey());
-            l1.put(l1Key, e.getValue());
+            l1.put(l1Key, new L1Entry<>(e.getKey(), e.getValue()));
             bus.publish(delegate.getName(), l1Key);
         }
     }
@@ -225,18 +237,33 @@ public final class L1RedisCache<K, V> implements RedisCache<K, V> {
         delegate.putAll(entries, ttl, unit);
         for (Map.Entry<K, V> e : entries.entrySet()) {
             String l1Key = keyFn.apply(e.getKey());
-            l1.put(l1Key, e.getValue());
+            l1.put(l1Key, new L1Entry<>(e.getKey(), e.getValue()));
             bus.publish(delegate.getName(), l1Key);
         }
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public Stream<Map.Entry<K, V>> entrySet() {
+        if (delegate instanceof NoOpRedisCache) {
+            // L1-only cache: L1 is the authoritative store. Predicate-based invalidation
+            // (e.g. role removal scanning for stale scope mappings) iterates this.
+            return l1.asMap().values().stream()
+                    .filter(v -> v != NEGATIVE)
+                    .map(v -> (L1Entry<K, V>) v)
+                    .map(e -> Map.entry(e.key(), e.value()));
+        }
         return delegate.entrySet();
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public Stream<K> keySet() {
+        if (delegate instanceof NoOpRedisCache) {
+            return l1.asMap().values().stream()
+                    .filter(v -> v != NEGATIVE)
+                    .map(v -> ((L1Entry<K, V>) v).key());
+        }
         return delegate.keySet();
     }
 

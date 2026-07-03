@@ -59,7 +59,7 @@ class RemoteExpirationTask extends BaseExpirationTask {
     }
 
     @Override
-    final Predicate<RealmModel> realmFilter() {
+    protected final Predicate<RealmModel> realmFilter() {
         return consistentHash.consistentHashSnapshot();
     }
 

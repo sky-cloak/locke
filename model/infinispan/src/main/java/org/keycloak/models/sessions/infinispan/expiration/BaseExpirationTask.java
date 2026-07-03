@@ -45,7 +45,7 @@ import org.jboss.logging.Logger;
  * The implementation only need to provide a {@link Predicate}, by implementing {@link #realmFilter()}. This
  * {@link Predicate} decides if the session belonging to the {@link RealmModel} must be checked in this round.
  */
-abstract class BaseExpirationTask implements ExpirationTask {
+public abstract class BaseExpirationTask implements ExpirationTask {
 
     protected static final Logger log = Logger.getLogger(MethodHandles.lookup().lookupClass());
 
@@ -56,7 +56,7 @@ abstract class BaseExpirationTask implements ExpirationTask {
     private final Consumer<Duration> onTaskExecuted;
     private final ExecutorService executorService;
 
-    BaseExpirationTask(KeycloakSessionFactory factory, ScheduledExecutorService scheduledExecutorService, int delaySeconds, Consumer<Duration> onTaskExecuted) {
+    protected BaseExpirationTask(KeycloakSessionFactory factory, ScheduledExecutorService scheduledExecutorService, int delaySeconds, Consumer<Duration> onTaskExecuted) {
         this.factory = Objects.requireNonNull(factory);
         this.delaySeconds = delaySeconds;
         this.scheduledExecutorService = Objects.requireNonNull(scheduledExecutorService);
@@ -109,7 +109,7 @@ abstract class BaseExpirationTask implements ExpirationTask {
         }
     }
 
-    abstract Predicate<RealmModel> realmFilter();
+    protected abstract Predicate<RealmModel> realmFilter();
 
     private void scheduleNextTask() {
         var existingTask = currentTask.get();

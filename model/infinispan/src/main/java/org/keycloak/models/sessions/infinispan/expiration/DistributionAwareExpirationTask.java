@@ -49,7 +49,7 @@ class DistributionAwareExpirationTask extends BaseExpirationTask implements Pred
     }
 
     @Override
-    final Predicate<RealmModel> realmFilter() {
+    protected final Predicate<RealmModel> realmFilter() {
         return this;
     }
 
