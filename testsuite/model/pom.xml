@@ -95,6 +95,11 @@
             <artifactId>keycloak-model-infinispan</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.keycloak</groupId>
+            <artifactId>keycloak-model-redis</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>org.keycloak.testsuite</groupId>
             <artifactId>integration-arquillian-testsuite-providers</artifactId>
             <version>${project.version}</version>
@@ -212,6 +217,16 @@
             <id>jpa+infinispan</id>
             <properties>
                 <keycloak.model.parameters>Infinispan,Jpa</keycloak.model.parameters>
+            </properties>
+        </profile>
+
+        <!-- Locke: behavioral-parity gate (docs/adr/0004) — upstream's model conformance
+             tests run against the Redis cache backend. Needs a reachable Redis
+             (-Dkeycloak.connectionsRedis.url, default redis://localhost:6379). -->
+        <profile>
+            <id>jpa+redis</id>
+            <properties>
+                <keycloak.model.parameters>Redis,Jpa</keycloak.model.parameters>
             </properties>
         </profile>
 
