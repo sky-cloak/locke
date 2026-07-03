@@ -8,6 +8,11 @@ the Percona Server / Amazon Corretto convention.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [26.6.4-1] - 2026-07-03
+
+### Changed
+- Built from Keycloak 26.6.4. See the upstream release notes.
+
 ## [26.6.4-4] - 2026-07-03
 
 ### Fixed
