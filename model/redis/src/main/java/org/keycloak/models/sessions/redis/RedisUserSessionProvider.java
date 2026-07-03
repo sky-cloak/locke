@@ -1,10 +1,12 @@
 package org.keycloak.models.sessions.redis;
 
+import java.sql.SQLException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
@@ -14,12 +16,15 @@ import org.keycloak.common.util.Time;
 import org.keycloak.models.AuthenticatedClientSessionModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.ModelIllegalStateException;
+import org.keycloak.models.OfflineUserSessionModel;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.UserSessionModel;
 import org.keycloak.models.UserSessionProvider;
+import org.keycloak.models.session.PersistentUserSessionAdapter;
 import org.keycloak.models.session.UserSessionPersisterProvider;
-import org.keycloak.models.utils.SessionExpirationUtils;
+import org.keycloak.models.utils.KeycloakModelUtils;
 
 /**
  * Redis user session provider that delegates to JPA persistent sessions.
@@ -45,6 +50,11 @@ public class RedisUserSessionProvider implements UserSessionProvider {
         this.startupTime = Time.currentTime();
     }
 
+    // Creation retries: mirrors upstream's retry-then-fail contract for conflicting creates.
+    private static final int CREATE_RETRIES = 3;
+    // Retries for the short separate write transactions (conflicts, transient pool pressure).
+    private static final int WRITE_RETRIES = 10;
+
     private UserSessionPersisterProvider persister() {
         return session.getProvider(UserSessionPersisterProvider.class);
     }
@@ -52,6 +62,69 @@ public class RedisUserSessionProvider implements UserSessionProvider {
     @Override
     public KeycloakSession getKeycloakSession() {
         return session;
+    }
+
+    /**
+     * Wraps a persister-loaded user session; returns null when the session is expired
+     * (idle or max-lifespan) — the load-time equivalent of upstream's cache expiration.
+     */
+    private UserSessionModel wrap(RealmModel realm, UserSessionModel loaded, boolean offline) {
+        if (loaded == null) {
+            return null;
+        }
+        if (RedisUserSessionAdapter.isUserSessionExpired(realm, loaded, offline)) {
+            return null;
+        }
+        if (loaded instanceof RedisUserSessionAdapter) {
+            return loaded;
+        }
+        return new RedisUserSessionAdapter((PersistentUserSessionAdapter) loaded, session.getKeycloakSessionFactory(), realm, offline);
+    }
+
+    /**
+     * Runs a persister create in its own committed transaction so concurrent-create
+     * conflicts can be handled without poisoning the caller's transaction (a failed
+     * flush marks it rollback-only). Optimistic-lock conflicts (the create can take
+     * the update path for an existing row) are retried.
+     *
+     * @return true when this call wrote the row, false when a concurrent insert won
+     *         the race (duplicate key)
+     */
+    private boolean tryCreateInSeparateTx(Consumer<UserSessionPersisterProvider> job) {
+        for (int attempt = 0; ; attempt++) {
+            try {
+                KeycloakModelUtils.runJobInTransaction(session.getKeycloakSessionFactory(),
+                        s -> job.accept(s.getProvider(UserSessionPersisterProvider.class)));
+                return true;
+            } catch (RuntimeException e) {
+                if (isConstraintViolation(e)) {
+                    return false;
+                }
+                if (attempt >= WRITE_RETRIES || !AutoPersistingClientSessionAdapter.isRetryableConflict(e)) {
+                    throw e;
+                }
+                AutoPersistingClientSessionAdapter.backoff(attempt, e);
+            }
+        }
+    }
+
+    /** True when the exception chain contains an integrity-constraint SQL error (SQLState 23xxx). */
+    private static boolean isConstraintViolation(Throwable t) {
+        for (int depth = 0; t != null && depth < 20; t = t.getCause(), depth++) {
+            if (t instanceof SQLException sql) {
+                String state = sql.getSQLState();
+                if (state != null && state.startsWith("23")) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static String userIdOf(UserSessionModel userSession) {
+        return userSession instanceof OfflineUserSessionModel offlineModel
+                ? offlineModel.getUserId()
+                : userSession.getUser().getId();
     }
 
     @Override
@@ -77,12 +150,14 @@ public class RedisUserSessionProvider implements UserSessionProvider {
         }
 
         boolean offline = userSession.isOffline();
-        persister().createClientSession(clientSession, offline);
-        AuthenticatedClientSessionModel loaded = persister().loadClientSession(realm, client, userSession, offline);
-        if (loaded == null) {
-            return null;
-        }
-        AuthenticatedClientSessionModel adapter = new AutoPersistingClientSessionAdapter(loaded, persister(), offline);
+        // If a concurrent request won the insert race the row already carries equivalent
+        // data; either way the freshly-built model below reflects the intended state.
+        // Reloading through this session's persistence context could return a stale
+        // managed entity (e.g. when re-creating a client session that expired earlier
+        // in this transaction), so the in-memory model is the safer source.
+        tryCreateInSeparateTx(p -> p.createClientSession(clientSession, offline));
+        AuthenticatedClientSessionModel adapter =
+                new AutoPersistingClientSessionAdapter(clientSession, session.getKeycloakSessionFactory(), offline);
         // The persister adapter latches its client-session map on first read (the
         // existing-check above), so register the new session there too or later reads
         // through this user session model won't see it.
@@ -99,34 +174,14 @@ public class RedisUserSessionProvider implements UserSessionProvider {
             return local == null ? null : local.getAuthenticatedClientSessionByClient(client.getId());
         }
         AuthenticatedClientSessionModel clientSession = userSession.getAuthenticatedClientSessionByClient(client.getId());
-        if (clientSession == null || isClientSessionExpired(client.getRealm(), client, userSession, clientSession, offline)) {
+        if (clientSession == null
+                || RedisUserSessionAdapter.isClientSessionExpired(client.getRealm(), client, userSession, clientSession, offline)) {
             return null;
         }
-        return clientSession;
-    }
-
-    // The persister loads client sessions unfiltered, so expiration is checked here
-    // (upstream does this via cache expiration in the Infinispan layer).
-    private static boolean isClientSessionExpired(RealmModel realm, ClientModel client, UserSessionModel userSession,
-                                                  AuthenticatedClientSessionModel clientSession, boolean offline) {
-        long now = Time.currentTimeMillis();
-        boolean rememberMe = userSession.isRememberMe();
-        long idleTimestamp = SessionExpirationUtils.calculateClientSessionIdleTimestamp(
-                offline, rememberMe, TimeUnit.SECONDS.toMillis(clientSession.getTimestamp()), realm, client);
-        if (idleTimestamp < now) {
-            return true;
+        if (clientSession instanceof AutoPersistingClientSessionAdapter) {
+            return clientSession;
         }
-        long started = clientSession.getTimestamp();
-        String startedNote = clientSession.getNote(AuthenticatedClientSessionModel.STARTED_AT_NOTE);
-        if (startedNote != null) {
-            try {
-                started = Long.parseLong(startedNote);
-            } catch (NumberFormatException ignored) {
-            }
-        }
-        long lifespanTimestamp = SessionExpirationUtils.calculateClientSessionMaxLifespanTimestamp(
-                offline, rememberMe, TimeUnit.SECONDS.toMillis(started), TimeUnit.SECONDS.toMillis(userSession.getStarted()), realm, client);
-        return lifespanTimestamp > 0 && lifespanTimestamp < now;
+        return new AutoPersistingClientSessionAdapter(clientSession, session.getKeycloakSessionFactory(), offline);
     }
 
     @Override
@@ -144,10 +199,31 @@ public class RedisUserSessionProvider implements UserSessionProvider {
             return userSession;
         }
 
-        // Create a persistent user session via the persister
         UserSessionModel userSessionModel = new PersistableUserSession(id, realm, user, loginUsername, ipAddress, authMethod, rememberMe, brokerSessionId, brokerUserId);
-        persister().createUserSession(userSessionModel, false);
-        return persister().loadUserSession(realm, id, false);
+        for (int attempt = 0; attempt <= CREATE_RETRIES; attempt++) {
+            UserSessionModel existing = persister().loadUserSession(realm, id, false);
+            if (existing != null) {
+                if (!user.getId().equals(userIdOf(existing))) {
+                    // Same contract as upstream's conflicting-create retry loop.
+                    if (attempt == CREATE_RETRIES) {
+                        throw new RuntimeException("Maximum number of retries reached",
+                                new ModelIllegalStateException("User ID of the session does not match, the user ID should not change"));
+                    }
+                    continue;
+                }
+                // Concurrently created for the same user: merge — mutations on the returned
+                // adapter update the existing row.
+                return wrap(realm, existing, false);
+            }
+            if (!tryCreateInSeparateTx(p -> p.createUserSession(userSessionModel, false))) {
+                continue; // lost the race — reload and merge
+            }
+            UserSessionModel loaded = wrap(realm, persister().loadUserSession(realm, id, false), false);
+            if (loaded != null) {
+                return loaded;
+            }
+        }
+        throw new IllegalStateException("Unable to create user session " + id);
     }
 
     @Override
@@ -156,30 +232,34 @@ public class RedisUserSessionProvider implements UserSessionProvider {
         if (transientSession != null && transientSession.getRealm().getId().equals(realm.getId())) {
             return transientSession;
         }
-        return persister().loadUserSession(realm, id, false);
+        return wrap(realm, persister().loadUserSession(realm, id, false), false);
     }
 
     @Override
     public Stream<UserSessionModel> getUserSessionsStream(RealmModel realm, UserModel user) {
-        return persister().loadUserSessionsStream(realm, user, false, null, null);
+        return persister().loadUserSessionsStream(realm, user, false, null, null)
+                .map(s -> wrap(realm, s, false))
+                .filter(Objects::nonNull);
     }
 
     @Override
     public Stream<UserSessionModel> getUserSessionByBrokerUserIdStream(RealmModel realm, String brokerUserId) {
         // Load all user sessions and filter by broker user ID
         return persister().loadUserSessionsStream(null, null, false, null)
-                .filter(s -> brokerUserId.equals(s.getBrokerUserId()) && realm.getId().equals(s.getRealm().getId()));
+                .filter(s -> brokerUserId.equals(s.getBrokerUserId()) && realm.getId().equals(s.getRealm().getId()))
+                .map(s -> wrap(realm, s, false))
+                .filter(Objects::nonNull);
     }
 
     @Override
     public UserSessionModel getUserSessionByBrokerSessionId(RealmModel realm, String brokerSessionId) {
-        return persister().loadUserSessionsStreamByBrokerSessionId(realm, brokerSessionId, false);
+        return wrap(realm, persister().loadUserSessionsStreamByBrokerSessionId(realm, brokerSessionId, false), false);
     }
 
     @Override
     public UserSessionModel getUserSessionWithPredicate(RealmModel realm, String id, boolean offline, Predicate<UserSessionModel> predicate) {
         UserSessionModel userSession = offline
-                ? persister().loadUserSession(realm, id, true)
+                ? getOfflineUserSession(realm, id)
                 : getUserSession(realm, id);
         if (userSession != null && predicate.test(userSession)) {
             return userSession;
@@ -228,13 +308,19 @@ public class RedisUserSessionProvider implements UserSessionProvider {
 
     @Override
     public UserSessionModel createOfflineUserSession(UserSessionModel userSession) {
-        persister().createUserSession(userSession, true);
-        return persister().loadUserSession(userSession.getRealm(), userSession.getId(), true);
+        RealmModel realm = userSession.getRealm();
+        UserSessionModel existing = persister().loadUserSession(realm, userSession.getId(), true);
+        if (existing == null) {
+            // A lost duplicate-key race means a concurrent request created the offline copy.
+            tryCreateInSeparateTx(p -> p.createUserSession(userSession, true));
+            existing = persister().loadUserSession(realm, userSession.getId(), true);
+        }
+        return wrap(realm, existing, true);
     }
 
     @Override
     public UserSessionModel getOfflineUserSession(RealmModel realm, String userSessionId) {
-        return persister().loadUserSession(realm, userSessionId, true);
+        return wrap(realm, persister().loadUserSession(realm, userSessionId, true), true);
     }
 
     @Override
@@ -245,25 +331,40 @@ public class RedisUserSessionProvider implements UserSessionProvider {
     @Override
     public AuthenticatedClientSessionModel createOfflineClientSession(AuthenticatedClientSessionModel clientSession,
                                                                        UserSessionModel offlineUserSession) {
-        persister().createClientSession(clientSession, true);
-        AuthenticatedClientSessionModel loaded = persister().loadClientSession(offlineUserSession.getRealm(),
-                clientSession.getClient(), offlineUserSession, true);
-        if (loaded != null) {
-            // Same latched-map refresh as in createClientSession.
-            offlineUserSession.getAuthenticatedClientSessions().put(clientSession.getClient().getId(), loaded);
+        RealmModel realm = offlineUserSession.getRealm();
+        // Snapshot the online client session into a model bound to the offline user session;
+        // as in createClientSession, the in-memory model avoids stale persistence-context reads.
+        TransientClientSessionModel copy = new TransientClientSessionModel(clientSession.getId(),
+                clientSession.getClient(), offlineUserSession, realm, clientSession.getTimestamp());
+        copy.setAction(clientSession.getAction());
+        copy.setProtocol(clientSession.getProtocol());
+        copy.setRedirectUri(clientSession.getRedirectUri());
+        Map<String, String> notes = clientSession.getNotes();
+        if (notes != null) {
+            copy.getNotes().putAll(notes);
         }
-        return loaded;
+
+        tryCreateInSeparateTx(p -> p.createClientSession(copy, true));
+        AuthenticatedClientSessionModel adapter =
+                new AutoPersistingClientSessionAdapter(copy, session.getKeycloakSessionFactory(), true);
+        // Same latched-map refresh as in createClientSession.
+        offlineUserSession.getAuthenticatedClientSessions().put(clientSession.getClient().getId(), adapter);
+        return adapter;
     }
 
     @Override
     public Stream<UserSessionModel> getOfflineUserSessionsStream(RealmModel realm, UserModel user) {
-        return persister().loadUserSessionsStream(realm, user, true, null, null);
+        return persister().loadUserSessionsStream(realm, user, true, null, null)
+                .map(s -> wrap(realm, s, true))
+                .filter(Objects::nonNull);
     }
 
     @Override
     public Stream<UserSessionModel> getOfflineUserSessionByBrokerUserIdStream(RealmModel realm, String brokerUserId) {
         return persister().loadUserSessionsStream(null, null, true, null)
-                .filter(s -> brokerUserId.equals(s.getBrokerUserId()) && realm.getId().equals(s.getRealm().getId()));
+                .filter(s -> brokerUserId.equals(s.getBrokerUserId()) && realm.getId().equals(s.getRealm().getId()))
+                .map(s -> wrap(realm, s, true))
+                .filter(Objects::nonNull);
     }
 
     @Override
@@ -273,12 +374,14 @@ public class RedisUserSessionProvider implements UserSessionProvider {
 
     @Override
     public Stream<UserSessionModel> readOnlyStreamUserSessions(RealmModel realm, ClientModel client, int skip, int maxResults) {
-        return persister().readOnlyUserSessionStream(realm, client, false, skip, maxResults);
+        return persister().readOnlyUserSessionStream(realm, client, false, skip, maxResults)
+                .filter(s -> !RedisUserSessionAdapter.isUserSessionExpired(realm, s, false));
     }
 
     @Override
     public Stream<UserSessionModel> readOnlyStreamOfflineUserSessions(RealmModel realm, ClientModel client, int skip, int maxResults) {
-        return persister().readOnlyUserSessionStream(realm, client, true, skip, maxResults);
+        return persister().readOnlyUserSessionStream(realm, client, true, skip, maxResults)
+                .filter(s -> !RedisUserSessionAdapter.isUserSessionExpired(realm, s, true));
     }
 
     @Override
