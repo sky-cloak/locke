@@ -8,6 +8,16 @@ the Percona Server / Amazon Corretto convention.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [26.6.4-4] - 2026-07-03
+
+### Fixed
+- Redis session behavioral parity, wave 2 (completes #44): idempotent session/client-session
+  creation (no more concurrent PK-violation 500s), load-time expiration (idle + max lifespan,
+  online/offline), a per-realm-leased periodic expiration sweep, user-removal session cascade,
+  single-use get() empty-notes fix, and L1-only caches answering entrySet() so predicate
+  invalidations (e.g. deleted roles in client scopes) actually run. Conformance gate green
+  (126 tests, 0 failures); no upstream files touched.
+
 ## [26.6.4-3] - 2026-07-03
 
 ### Fixed
