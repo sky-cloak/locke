@@ -64,3 +64,4 @@ and drops the distributed cache entirely, for DB-only operational simplicity. Di
 Locke's Redis backend, which keeps a cache for performance and resilience. Kept separate here
 so "Locke's Redis mode" and "upstream cacheless mode" are never conflated in docs or
 positioning.
+
