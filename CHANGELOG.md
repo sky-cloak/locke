@@ -8,6 +8,15 @@ the Percona Server / Amazon Corretto convention.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [26.6.4-3] - 2026-07-03
+
+### Fixed
+- Redis session behavioral parity, wave 1: client_credentials (transient) sessions work
+  and are never persisted (#43); client sessions created in-transaction are visible on the
+  session adapter; client sessions are expiration-checked on load; auth-session TTL now
+  follows SessionExpiration (was capped at 60s); auth-session tab removal and limit
+  eviction actually delete. Tracked in #44; found by the jpa+redis conformance gate.
+
 ## [26.6.4-2] - 2026-07-01
 
 ### Fixed
