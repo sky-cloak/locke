@@ -1,0 +1,28 @@
+Locke
+Copyright 2026 Skycloak (skycloak.io)
+
+This product is a distribution of Keycloak and includes software developed by
+the Keycloak project and its contributors.
+
+  Keycloak
+  Copyright Red Hat, Inc., and individual contributors.
+  Licensed under the Apache License, Version 2.0.
+  https://www.keycloak.org  ·  https://github.com/keycloak/keycloak
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this file except in compliance with the License. You may obtain a copy of the
+License in LICENSE.txt or at:
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
+
+"Keycloak" is a trademark of Red Hat, Inc. / CNCF. Locke is Keycloak-compatible
+and is not endorsed by or affiliated with the Keycloak project. See TRADEMARK.md.
+
+Redis-backed cache modules and the Locke distribution tooling under model/redis/,
+benchmark/, and docs/redis-* are Copyright 2026 Skycloak, licensed under the same
+Apache License, Version 2.0.

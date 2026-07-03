@@ -1,0 +1,43 @@
+# In-cluster Redis Cluster (6 nodes: 3 primaries + 3 replicas) for the Locke cluster-mode
+# topology test. Tiny pods, co-located on the infra node. Each announces its pod IP so the
+# Lettuce cluster client can route. Form the cluster after the pods are Ready with:
+#   kubectl exec -n locke-bench rediscluster-0 -- sh -c \
+#     'redis-cli --cluster create $(for i in 0 1 2 3 4 5; do \
+#        getent hosts rediscluster-$i.rediscluster | awk "{print \$1\":6379\"}"; done) \
+#        --cluster-replicas 1 --cluster-yes'
+# Then point Locke at: redis-cluster://rediscluster-0.rediscluster:6379,rediscluster-1.rediscluster:6379,...
+apiVersion: v1
+kind: Service
+metadata: { name: rediscluster, namespace: locke-bench }
+spec:
+  clusterIP: None
+  selector: { app: rediscluster }
+  ports:
+    - { name: client, port: 6379 }
+    - { name: gossip, port: 16379 }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: rediscluster, namespace: locke-bench }
+spec:
+  serviceName: rediscluster
+  replicas: 6
+  selector: { matchLabels: { app: rediscluster } }
+  template:
+    metadata: { labels: { app: rediscluster } }
+    spec:
+      nodeSelector: { bench-role: infra }
+      tolerations: [ { key: dedicated, operator: Equal, value: locke-bench, effect: NoSchedule } ]
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          command:
+            - sh
+            - -c
+            - exec redis-server --cluster-enabled yes --cluster-node-timeout 5000
+              --cluster-announce-ip "$(POD_IP)" --save "" --appendonly no
+          env:
+            - name: POD_IP
+              valueFrom: { fieldRef: { fieldPath: status.podIP } }
+          ports: [ { containerPort: 6379 }, { containerPort: 16379 } ]
+          resources: { requests: { cpu: "200m", memory: 128Mi }, limits: { memory: 512Mi } }

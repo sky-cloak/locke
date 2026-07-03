@@ -27,6 +27,7 @@ import org.keycloak.models.cache.UserCache;
 import org.keycloak.models.cache.UserCacheProviderFactory;
 import org.keycloak.models.cache.infinispan.entities.Revisioned;
 import org.keycloak.models.cache.infinispan.events.InvalidationEvent;
+import org.keycloak.provider.EnvironmentDependentProviderFactory;
 
 import org.infinispan.Cache;
 import org.jboss.logging.Logger;
@@ -34,7 +35,7 @@ import org.jboss.logging.Logger;
 /**
  * @author <a href="mailto:sthorger@redhat.com">Stian Thorgersen</a>
  */
-public class InfinispanUserCacheProviderFactory implements UserCacheProviderFactory {
+public class InfinispanUserCacheProviderFactory implements UserCacheProviderFactory, EnvironmentDependentProviderFactory {
 
     private static final Logger log = Logger.getLogger(InfinispanUserCacheProviderFactory.class);
     public static final String USER_CLEAR_CACHE_EVENTS = "USER_CLEAR_CACHE_EVENTS";
@@ -59,21 +60,24 @@ public class InfinispanUserCacheProviderFactory implements UserCacheProviderFact
                     userCache = new UserCacheManager(cache, revisions);
 
                     ClusterProvider cluster = session.getProvider(ClusterProvider.class);
+                    if (cluster != null) {
+                        cluster.registerListener(USER_INVALIDATION_EVENTS, (ClusterEvent event) -> {
 
-                    cluster.registerListener(USER_INVALIDATION_EVENTS, (ClusterEvent event) -> {
+                            InvalidationEvent invalidationEvent = (InvalidationEvent) event;
+                            userCache.invalidationEventReceived(invalidationEvent);
 
-                        InvalidationEvent invalidationEvent = (InvalidationEvent) event;
-                        userCache.invalidationEventReceived(invalidationEvent);
+                        });
 
-                    });
+                        cluster.registerListener(USER_CLEAR_CACHE_EVENTS, (ClusterEvent event) -> {
 
-                    cluster.registerListener(USER_CLEAR_CACHE_EVENTS, (ClusterEvent event) -> {
+                            userCache.clear();
 
-                        userCache.clear();
+                        });
 
-                    });
-
-                    log.debug("Registered cluster listeners");
+                        log.debug("Registered cluster listeners");
+                    } else {
+                        log.debug("ClusterProvider not available, skipping cluster listener registration");
+                    }
                 }
             }
         }
@@ -95,5 +99,10 @@ public class InfinispanUserCacheProviderFactory implements UserCacheProviderFact
     @Override
     public String getId() {
         return "default";
+    }
+
+    @Override
+    public boolean isSupported(Config.Scope config) {
+        return !"redis".equals(config.root().get("cache"));
     }
 }
