@@ -18,6 +18,7 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.sessions.redis.entities.RedisAuthenticationSessionEntity;
 import org.keycloak.models.sessions.redis.entities.RedisRootAuthenticationSessionEntity;
+import org.keycloak.models.utils.SessionExpiration;
 import org.keycloak.sessions.AuthenticationSessionCompoundId;
 import org.keycloak.sessions.AuthenticationSessionProvider;
 import org.keycloak.sessions.RootAuthenticationSessionModel;
@@ -71,8 +72,10 @@ public class RedisAuthenticationSessionProvider implements AuthenticationSession
     }
 
     private long getAuthSessionLifespan(RealmModel realm) {
-        int lifespan = realm.getAccessCodeLifespan();
-        return lifespan > 0 ? lifespan : 300; // default 5 minutes
+        // Same lifespan as upstream (max of login timeout / user action / access code),
+        // not just access-code lifespan (60s) which cut logins off mid-flow.
+        int lifespan = SessionExpiration.getAuthSessionLifespan(realm);
+        return lifespan > 0 ? lifespan : 300;
     }
 
     @Override
@@ -157,10 +160,27 @@ public class RedisAuthenticationSessionProvider implements AuthenticationSession
                 getAuthSessionLifespan(realm));
     }
 
-    /** Hot path: remove one tab's field, refresh parent's TTL. One HDEL + EXPIRE round-trip. */
+    /** Remove one tab's field, refresh parent's TTL. One HDEL + EXPIRE round-trip. */
     void removeTab(RealmModel realm, String rootId, String tabId) {
         hash.deleteFieldRefreshTtl(cacheKey(rootId), TAB_FIELD_PREFIX + tabId,
                 getAuthSessionLifespan(realm));
+    }
+
+    /**
+     * Remove one tab, then delete the whole root when no tabs remain (upstream drops
+     * an empty root session); otherwise bump the root timestamp. The remaining-tabs
+     * check is done server-side because with concurrent removals the caller's local
+     * entity can be stale — whoever HDELs the last tab must also drop the root.
+     */
+    void removeTabCollapsingEmptyRoot(RealmModel realm, String rootId, String tabId, int timestamp) {
+        removeTab(realm, rootId, tabId);
+        boolean tabsLeft = hash.fieldNames(cacheKey(rootId)).stream()
+                .anyMatch(f -> f.startsWith(TAB_FIELD_PREFIX));
+        if (tabsLeft) {
+            persistTimestamp(realm, rootId, timestamp);
+        } else {
+            hash.remove(cacheKey(rootId));
+        }
     }
 
     @Override

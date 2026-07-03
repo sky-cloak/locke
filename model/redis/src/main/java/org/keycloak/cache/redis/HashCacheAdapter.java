@@ -187,6 +187,18 @@ public final class HashCacheAdapter<K> {
         }
     }
 
+    /** List the field names of a hash ({@code HKEYS}). Empty list if the key is absent. */
+    public java.util.List<String> fieldNames(K key) {
+        return withConnection(cmd -> {
+            java.util.List<byte[]> raw = cmd.hkeys(entityKey(key));
+            java.util.List<String> out = new java.util.ArrayList<>(raw.size());
+            for (byte[] b : raw) {
+                out.add(new String(b, StandardCharsets.UTF_8));
+            }
+            return out;
+        });
+    }
+
     public boolean exists(K key) {
         return withConnection(cmd -> cmd.exists(entityKey(key)) > 0);
     }
