@@ -36,7 +36,7 @@ class LocalExpirationTask extends BaseExpirationTask implements Predicate<RealmM
     }
 
     @Override
-    protected final Predicate<RealmModel> realmFilter() {
+    final Predicate<RealmModel> realmFilter() {
         return this;
     }
 
