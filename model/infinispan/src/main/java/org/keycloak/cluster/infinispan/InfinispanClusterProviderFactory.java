@@ -154,7 +154,7 @@ public class InfinispanClusterProviderFactory implements ClusterProviderFactory,
     @Override
     public boolean isSupported(Config.Scope config) {
         return InfinispanUtils.isEmbeddedInfinispan() &&
-                !Profile.isFeatureEnabled(Profile.Feature.STATELESS);
+                !Profile.isFeatureEnabled(Profile.Feature.STATELESS) && !"redis".equals(config.root().get("cache"));
     }
 
     @Listener

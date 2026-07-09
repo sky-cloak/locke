@@ -116,7 +116,7 @@ public class InfinispanStickySessionEncoderProviderFactory implements StickySess
 
     @Override
     public boolean isSupported(Config.Scope config) {
-        return InfinispanUtils.isEmbeddedInfinispan();
+        return InfinispanUtils.isEmbeddedInfinispan() && !"redis".equals(config.root().get("cache"));
     }
 
     @Override

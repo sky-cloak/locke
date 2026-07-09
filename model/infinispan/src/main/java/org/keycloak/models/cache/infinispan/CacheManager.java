@@ -216,8 +216,10 @@ public abstract class CacheManager {
 
 
     public void sendInvalidationEvents(KeycloakSession session, Collection<InvalidationEvent> invalidationEvents, String eventKey) {
-        session.getProvider(ClusterProvider.class)
-                .notify(eventKey, invalidationEvents, true);
+        ClusterProvider cluster = session.getProvider(ClusterProvider.class);
+        if (cluster != null) {
+            cluster.notify(eventKey, invalidationEvents, true);
+        }
     }
 
 

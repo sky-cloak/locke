@@ -1,0 +1,49 @@
+# In-cluster benchmark runner: executes matrix-all.sh from inside the cluster so the
+# whole run survives the operator's laptop sleeping/disconnecting. RBAC is scoped to
+# locke-bench only (exec/scale/delete pods + statefulsets + deployments).
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: bench-runner, namespace: locke-bench }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: { name: bench-runner, namespace: locke-bench }
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create", "get"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets", "statefulsets/scale", "deployments", "deployments/scale"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: { name: bench-runner, namespace: locke-bench }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: bench-runner }
+subjects: [ { kind: ServiceAccount, name: bench-runner, namespace: locke-bench } ]
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: bench-runner, namespace: locke-bench, labels: { app: bench-runner } }
+spec:
+  serviceAccountName: bench-runner
+  nodeSelector: { bench-role: infra }
+  restartPolicy: Never
+  containers:
+    - name: runner
+      image: alpine/k8s:1.31.1
+      command: ["/bin/bash", "-c", "cd /work && bash /scripts/matrix-all.sh 2>&1 | tee /work/full.log"]
+      volumeMounts:
+        - { name: scripts, mountPath: /scripts }
+        - { name: work, mountPath: /work }
+      resources:
+        requests: { cpu: "200m", memory: 256Mi }
+        limits: { cpu: "1", memory: 1Gi }
+  volumes:
+    - name: scripts
+      configMap: { name: bench-scripts }
+    - name: work
+      emptyDir: {}

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 220" role="img" aria-label="Locke">
+  <rect x="20" y="20" width="180" height="180" rx="40" fill="#3B3B98"/>
+  <g fill="none" stroke="#FFFFFF" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"
+     transform="translate(20,20) scale(0.703)">
+    <path d="M96 60 V112"/>
+    <path d="M96 138 V196 H188"/>
+  </g>
+  <!-- For production, outline this text to paths so it renders without the font installed. -->
+  <text x="238" y="150" font-family="Inter, Helvetica, Arial, sans-serif" font-size="128"
+        font-weight="700" letter-spacing="-5" fill="#3B3B98">locke</text>
+</svg>
