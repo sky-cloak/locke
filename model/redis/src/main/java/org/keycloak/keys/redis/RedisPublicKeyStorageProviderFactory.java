@@ -45,6 +45,9 @@ public class RedisPublicKeyStorageProviderFactory implements PublicKeyStoragePro
 
     public static final String PROVIDER_ID = "redis";
 
+    /** Cluster task key for the admin "clear keys cache" fan-out. */
+    public static final String KEYS_CLEAR_CACHE_EVENTS = "KEYS_CLEAR_CACHE_EVENTS";
+
     private volatile Cache<String, PublicKeysEntry> keysCache;
 
     private final Map<String, FutureTask<PublicKeysEntry>> tasksInProgress = new ConcurrentHashMap<>();
@@ -93,6 +96,13 @@ public class RedisPublicKeyStorageProviderFactory implements PublicKeyStoragePro
     @Override
     public void postInit(KeycloakSessionFactory factory) {
         // No cross-node invalidation: keys are per-node, refreshed by TTL (see the provider javadoc).
+    }
+
+    /** Drops this node's cached keys. Fanning the clear out to the other nodes is the
+     *  {@link RedisCachePublicKeyProvider}'s job. */
+    public void clearCache() {
+        lazyInit();
+        keysCache.invalidateAll();
     }
 
     @Override

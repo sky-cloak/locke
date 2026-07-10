@@ -45,6 +45,9 @@ public class RedisCrlStorageProviderFactory implements CrlStorageProviderFactory
 
     public static final String PROVIDER_ID = "redis";
 
+    /** Cluster task key for the admin "clear CRL cache" fan-out. */
+    public static final String CRL_CLEAR_CACHE_EVENTS = "CRL_CLEAR_CACHE_EVENTS";
+
     private volatile Cache<String, CrlEntry> crlCache;
     private final Map<String, FutureTask<X509CRL>> tasksInProgress = new ConcurrentHashMap<>();
     private volatile long cacheTime;
@@ -99,6 +102,13 @@ public class RedisCrlStorageProviderFactory implements CrlStorageProviderFactory
     @Override
     public void postInit(KeycloakSessionFactory factory) {
         // no-op
+    }
+
+    /** Drops this node's cached CRLs. Fanning the clear out to the other nodes is the
+     *  {@link RedisCacheCrlProvider}'s job. */
+    public void clearCache() {
+        lazyInit();
+        crlCache.invalidateAll();
     }
 
     @Override
