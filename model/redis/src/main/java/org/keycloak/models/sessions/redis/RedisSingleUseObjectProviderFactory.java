@@ -75,10 +75,13 @@ public class RedisSingleUseObjectProviderFactory implements SingleUseObjectProvi
         session.getProvider(RevokedTokenPersisterProvider.class).getAllRevokedTokens().forEach(token -> {
             long lifespanSeconds = token.expiry() - currentTime;
             if (lifespanSeconds > 0) {
-                cache.putIfAbsent(RedisSingleUseObjectProvider.cacheKey(token.tokenId() + SingleUseObjectProvider.REVOKED_KEY),
+                Map<String, String> existing = cache.putIfAbsent(
+                        RedisSingleUseObjectProvider.cacheKey(token.tokenId() + SingleUseObjectProvider.REVOKED_KEY),
                         RedisSingleUseObjectProvider.withExpiry(Collections.emptyMap(), token.expiry()),
                         lifespanSeconds, TimeUnit.SECONDS);
-                count[0]++;
+                if (existing == null) {
+                    count[0]++;
+                }
             }
         });
         cache.put(RedisSingleUseObjectProvider.cacheKey(LOADED), Collections.emptyMap());

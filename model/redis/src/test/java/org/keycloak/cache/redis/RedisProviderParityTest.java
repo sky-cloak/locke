@@ -75,10 +75,14 @@ public class RedisProviderParityTest {
             List<String> underInfinispan = new ArrayList<>();
             List<String> underRedis = new ArrayList<>();
             for (ProviderFactory<?> f : safeLoad(spi.getProviderFactoryClass())) {
-                if (isEnabled(f, infinispan)) {
+                Boolean onInfinispan = isEnabled(f, infinispan);
+                Boolean onRedis = isEnabled(f, redis);
+                // A guard that cannot answer outside a running server counts for neither side.
+                // Counting it as enabled under redis would hide exactly the gap we look for.
+                if (Boolean.TRUE.equals(onInfinispan)) {
                     underInfinispan.add(f.getClass().getName());
                 }
-                if (isEnabled(f, redis)) {
+                if (Boolean.TRUE.equals(onRedis)) {
                     underRedis.add(f.getClass().getName());
                 }
             }
@@ -120,16 +124,15 @@ public class RedisProviderParityTest {
         return loaded;
     }
 
-    private static boolean isEnabled(ProviderFactory<?> f, Config.Scope scope) {
+    /** {@code null} when the factory's guard cannot be evaluated outside a running server. */
+    private static Boolean isEnabled(ProviderFactory<?> f, Config.Scope scope) {
         if (!(f instanceof EnvironmentDependentProviderFactory edpf)) {
             return true;
         }
         try {
             return edpf.isSupported(scope);
         } catch (RuntimeException e) {
-            // A guard that cannot answer outside a running server tells us nothing about
-            // parity; treat it as enabled rather than reporting a false gap.
-            return true;
+            return null;
         }
     }
 

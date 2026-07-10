@@ -30,8 +30,9 @@ import org.keycloak.models.session.RevokedTokenPersisterProvider;
  * (RFC 7009). Redis alone is not a durable record of them: an eviction under
  * {@code maxmemory-policy}, a failover that drops an unreplicated write, or a cache
  * tier without persistence would silently un-revoke a token. So revocations are also
- * written through to {@link RevokedTokenPersisterProvider}, and reloaded into Redis at
- * startup by the factory whenever the keyspace has lost them. Same contract as upstream.
+ * written through to {@link RevokedTokenPersisterProvider}, and the factory reloads them
+ * into an emptied keyspace at startup. Same contract as upstream, including its limit: a
+ * revocation evicted while the server runs is not restored until the next restart.
  */
 public class RedisSingleUseObjectProvider implements SingleUseObjectProvider {
 
@@ -133,8 +134,8 @@ public class RedisSingleUseObjectProvider implements SingleUseObjectProvider {
         if (isRevoked(key)) {
             throw new ModelException("Revoked tokens can't be removed");
         }
-        // {@link RedisCache#remove} is implemented via {@code GETDEL} in Lettuce —
-        // one round-trip that atomically returns the old value and deletes the key.
+        // {@link RedisCache#remove} atomically returns the old value and deletes the key in
+        // one round-trip, via a Lua GET+DEL rather than native GETDEL (see docs/adr/0003).
         // The previous read-then-delete (2 RTs) had a race where the read could see
         // a value that another node deleted before our delete arrived.
         Map<String, String> data = cache.remove(cacheKey(key));
