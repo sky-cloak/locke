@@ -55,8 +55,31 @@ public class RedisUserSessionProvider implements UserSessionProvider {
     // Retries for the short separate write transactions (conflicts, transient pool pressure).
     private static final int WRITE_RETRIES = 10;
 
+    /** Lazily built, dropped whenever a create commits; see {@link #persister()}. */
+    private UserSessionPersisterProvider persister;
+
+    /**
+     * Our own persister instance, rather than the one shared through {@code session.getProvider}.
+     *
+     * <p>Since 26.7.0 the JPA persister remembers, per instance, every session id it failed to
+     * find, and only a create on that same instance forgets it. Because we commit creates on a
+     * separate persister (see {@link #tryCreateInSeparateTx}), a shared instance that missed
+     * before the row existed would keep answering null for the rest of the request. Owning the
+     * instance lets us drop it once a create has changed what the database holds. It is built
+     * from this session, so it shares the same {@code EntityManager} and transaction.
+     */
     private UserSessionPersisterProvider persister() {
-        return session.getProvider(UserSessionPersisterProvider.class);
+        if (persister == null) {
+            persister = session.getKeycloakSessionFactory()
+                    .getProviderFactory(UserSessionPersisterProvider.class)
+                    .create(session);
+        }
+        return persister;
+    }
+
+    /** Discards remembered misses after a create has committed behind our back. */
+    private void invalidatePersister() {
+        persister = null;
     }
 
     @Override
@@ -95,9 +118,12 @@ public class RedisUserSessionProvider implements UserSessionProvider {
             try {
                 KeycloakModelUtils.runJobInTransaction(session.getKeycloakSessionFactory(),
                         s -> job.accept(s.getProvider(UserSessionPersisterProvider.class)));
+                // The row now exists, so any miss our persister remembered for it is stale.
+                invalidatePersister();
                 return true;
             } catch (RuntimeException e) {
                 if (isConstraintViolation(e)) {
+                    invalidatePersister(); // someone else inserted it; same staleness
                     return false;
                 }
                 if (attempt >= WRITE_RETRIES || !AutoPersistingClientSessionAdapter.isRetryableConflict(e)) {
@@ -201,27 +227,31 @@ public class RedisUserSessionProvider implements UserSessionProvider {
 
         UserSessionModel userSessionModel = new PersistableUserSession(id, realm, user, loginUsername, ipAddress, authMethod, rememberMe, brokerSessionId, brokerUserId);
         for (int attempt = 0; attempt <= CREATE_RETRIES; attempt++) {
-            UserSessionModel existing = persister().loadUserSession(realm, id, false);
-            if (existing != null) {
-                if (!user.getId().equals(userIdOf(existing))) {
-                    // Same contract as upstream's conflicting-create retry loop.
-                    if (attempt == CREATE_RETRIES) {
-                        throw new RuntimeException("Maximum number of retries reached",
-                                new ModelIllegalStateException("User ID of the session does not match, the user ID should not change"));
-                    }
-                    continue;
+            // Insert first, and only look the row up if the insert lost a race. Probing before
+            // the insert would record the id in this persister's not-in-database cache; the
+            // create runs on a different persister (separate transaction), so only that
+            // instance's cache is cleared and our later read would short-circuit to null.
+            if (tryCreateInSeparateTx(p -> p.createUserSession(userSessionModel, false))) {
+                UserSessionModel loaded = wrap(realm, persister().loadUserSession(realm, id, false), false);
+                if (loaded != null) {
+                    return loaded;
                 }
-                // Concurrently created for the same user: merge — mutations on the returned
-                // adapter update the existing row.
-                return wrap(realm, existing, false);
+                continue; // removed again by a concurrent request
             }
-            if (!tryCreateInSeparateTx(p -> p.createUserSession(userSessionModel, false))) {
-                continue; // lost the race — reload and merge
+
+            // Duplicate key: someone else inserted this id first. Load and merge.
+            UserSessionModel existing = persister().loadUserSession(realm, id, false);
+            if (existing == null) {
+                continue; // and then removed before we could read it
             }
-            UserSessionModel loaded = wrap(realm, persister().loadUserSession(realm, id, false), false);
-            if (loaded != null) {
-                return loaded;
+            if (!user.getId().equals(userIdOf(existing))) {
+                // Not retryable: the row belongs to another user and no retry will change that.
+                // Upstream raises this straight from JpaChangesPerformer, unwrapped.
+                throw new ModelIllegalStateException("User ID of the session does not match, the user ID should not change");
             }
+            // Concurrently created for the same user: merge — mutations on the returned
+            // adapter update the existing row.
+            return wrap(realm, existing, false);
         }
         throw new IllegalStateException("Unable to create user session " + id);
     }
