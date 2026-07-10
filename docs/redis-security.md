@@ -1,7 +1,7 @@
 # Redis security (TLS + authentication)
 
 Locke's Redis backend supports TLS (`rediss://`) and Redis ACL / legacy AUTH out of the
-box. This document covers what's available in Locke `26.6.4-4` and what's coming next.
+box. This document covers what's available in Locke `26.7.0-1` and what's coming next.
 
 > Cross-references:
 > - Architecture: [redis-cache-architecture.md](./redis-cache-architecture.md)
@@ -18,7 +18,7 @@ docker run --rm -p 8080:8080 \
   -e KC_CACHE_REDIS_URL=rediss://my-redis.example.com:6380 \
   -e KC_CACHE_REDIS_PASSWORD=$REDIS_PASSWORD \
   -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
-  ghcr.io/sky-cloak/locke:26.6.4-4 start-dev
+  ghcr.io/sky-cloak/locke:26.7.0-1 start-dev
 
 # Private-CA Redis (self-hosted, internal cluster): point at the CA bundle.
 docker run --rm -p 8080:8080 \
@@ -28,7 +28,7 @@ docker run --rm -p 8080:8080 \
   -e KC_CACHE_REDIS_TLS_CA_FILE=/etc/ssl/redis/ca.crt \
   -v /etc/ssl/redis:/etc/ssl/redis:ro \
   -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
-  ghcr.io/sky-cloak/locke:26.6.4-4 start-dev
+  ghcr.io/sky-cloak/locke:26.7.0-1 start-dev
 ```
 
 ## URL schemes

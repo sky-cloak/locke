@@ -8,6 +8,27 @@ the Percona Server / Amazon Corretto convention.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [26.7.0-1] - 2026-07-10
+
+### Changed
+- Built from Keycloak 26.7.0. See the upstream release notes.
+
+### Fixed
+- **Token revocation is now durable.** Revoking a token (RFC 7009) wrote only to Redis with a
+  TTL. Because a cache is not a durable record, losing the key would silently un-revoke the
+  token and it would be accepted again until its natural expiry: an eviction under
+  `maxmemory-policy`, a failover that dropped an unreplicated write, or a cache tier without
+  persistence. Revocations are now also written to the database and reloaded into an emptied
+  keyspace at startup, matching Infinispan mode. Affects all earlier releases.
+- **The admin "clear keys cache" and "clear CRL cache" actions work again.** Both SPIs had only
+  an Infinispan provider, disabled under `KC_CACHE=redis`, and their callers tolerate a missing
+  provider, so the endpoints did nothing and still reported success. For CRLs this mattered:
+  clearing the cache is how an operator drops a revoked certificate. Affects all earlier releases.
+- User sessions could not be created on Keycloak 26.7.0, so no login succeeded under
+  `KC_CACHE=redis`. 26.7.0 added a per-instance negative cache to the JPA session persister that
+  Locke's delegating provider did not account for. Never released.
+- `SingleUseObjectProvider` now rejects a null key and a non-positive lifespan, as upstream does.
+
 ## [26.6.4-4] - 2026-07-03
 
 ### Fixed

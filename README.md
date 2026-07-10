@@ -9,7 +9,7 @@
 
 [![Build](https://github.com/sky-cloak/locke/actions/workflows/locke-pr.yml/badge.svg)](https://github.com/sky-cloak/locke/actions/workflows/locke-pr.yml)
 [![Benchmarks](https://img.shields.io/badge/benchmarks-methodology%20%26%20results-blue)](./benchmark/RESULTS.md)
-[![Keycloak compatibility](https://img.shields.io/badge/Keycloak-26.6.4-blue)](./COMPATIBILITY.md)
+[![Keycloak compatibility](https://img.shields.io/badge/Keycloak-26.7.0-blue)](./COMPATIBILITY.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](./LICENSE.txt)
 
 Locke is a distribution of [Keycloak](https://www.keycloak.org) that ships with
@@ -29,13 +29,13 @@ Both backends ship in the same binary. Choose with one environment variable.
 # Default: embedded Infinispan, identical to upstream Keycloak
 docker run --rm -p 8080:8080 \
   -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
-  ghcr.io/sky-cloak/locke:26.6.4-4 start-dev
+  ghcr.io/sky-cloak/locke:26.7.0-1 start-dev
 
 # Redis backend: point it at any Redis / Valkey / wire-compatible store
 docker run --rm -p 8080:8080 \
   -e KC_CACHE=redis -e KC_CACHE_REDIS_URL=redis://my-redis:6379 \
   -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
-  ghcr.io/sky-cloak/locke:26.6.4-4 start-dev
+  ghcr.io/sky-cloak/locke:26.7.0-1 start-dev
 
 # Managed Redis with TLS (AWS ElastiCache, Azure Cache, Upstash, Redis Cloud, ...)
 docker run --rm -p 8080:8080 \
@@ -43,7 +43,7 @@ docker run --rm -p 8080:8080 \
   -e KC_CACHE_REDIS_URL=rediss://my-redis.example.com:6380 \
   -e KC_CACHE_REDIS_PASSWORD=$REDIS_PASSWORD \
   -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
-  ghcr.io/sky-cloak/locke:26.6.4-4 start-dev
+  ghcr.io/sky-cloak/locke:26.7.0-1 start-dev
 ```
 
 For TLS + auth options (custom CA, hostname verification, env-var precedence), see
@@ -86,7 +86,8 @@ Locke build 1." This is the Percona Server / Amazon Corretto convention.
 
 | Locke | Built from Keycloak | Status |
 |---|---|---|
-| `26.6.4-4` | 26.6.4 | current |
+| `26.7.0-1` | 26.7.0 | current |
+| `26.6.4-4` | 26.6.4 | superseded |
 | `26.6.3-3` | 26.6.3 | superseded |
 | `26.6.2-3` | 26.6.2 | superseded |
 | `26.6.1-2` | 26.6.1 | maintained |
