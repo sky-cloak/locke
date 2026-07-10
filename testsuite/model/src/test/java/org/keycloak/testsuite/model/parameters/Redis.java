@@ -25,6 +25,7 @@ import org.keycloak.crl.CrlStorageSpi;
 import org.keycloak.crl.redis.RedisCrlStorageProviderFactory;
 import org.keycloak.keys.PublicKeyStorageSpi;
 import org.keycloak.keys.redis.RedisPublicKeyStorageProviderFactory;
+import org.keycloak.models.RevokedTokenSpi;
 import org.keycloak.models.SingleUseObjectSpi;
 import org.keycloak.models.cache.CacheRealmProviderSpi;
 import org.keycloak.models.cache.CacheUserProviderSpi;
@@ -33,6 +34,7 @@ import org.keycloak.models.cache.redis.RedisCacheRealmProviderFactory;
 import org.keycloak.models.cache.redis.RedisUserCacheProviderFactory;
 import org.keycloak.models.cache.redis.authorization.RedisCacheStoreFactoryProviderFactory;
 import org.keycloak.models.session.UserSessionPersisterSpi;
+import org.keycloak.models.sessions.infinispan.InfinispanRevokedTokenProviderFactory;
 import org.keycloak.models.sessions.redis.RedisAuthenticationSessionProviderFactory;
 import org.keycloak.models.sessions.redis.RedisSingleUseObjectProviderFactory;
 import org.keycloak.models.sessions.redis.RedisStickySessionEncoderProviderFactory;
@@ -74,6 +76,7 @@ public class Redis extends KeycloakModelParameters {
             .add(SingleUseObjectSpi.class)
             .add(PublicKeyStorageSpi.class)
             .add(CrlStorageSpi.class)
+            .add(RevokedTokenSpi.class)
             .build();
 
     static final Set<Class<? extends ProviderFactory>> ALLOWED_FACTORIES = ImmutableSet.<Class<? extends ProviderFactory>>builder()
@@ -89,6 +92,10 @@ public class Redis extends KeycloakModelParameters {
             .add(RedisStickySessionEncoderProviderFactory.class)
             .add(RedisPublicKeyStorageProviderFactory.class)
             .add(RedisCrlStorageProviderFactory.class)
+            // Despite the name, this factory holds no Infinispan state: it wraps whichever
+            // SingleUseObjectProvider is registered, which under redis is ours. Upstream
+            // parked it in model/infinispan; it stays enabled under redis, so mirror that here.
+            .add(InfinispanRevokedTokenProviderFactory.class)
             .add(TimerProviderFactory.class)
             .build();
 
