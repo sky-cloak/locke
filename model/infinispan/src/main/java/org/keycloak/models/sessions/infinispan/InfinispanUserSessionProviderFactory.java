@@ -232,6 +232,11 @@ public class InfinispanUserSessionProviderFactory implements UserSessionProvider
         KeycloakSessionFactory sessionFactory = session.getKeycloakSessionFactory();
         ClusterProvider cluster = session.getProvider(ClusterProvider.class);
 
+        if (cluster == null) {
+            log.debug("ClusterProvider not available, skipping cluster listener registration");
+            return;
+        }
+
         cluster.registerListener(REALM_REMOVED_SESSION_EVENT,
                 new AbstractUserSessionClusterListener<RealmRemovedSessionEvent, UserSessionProvider>(sessionFactory, UserSessionProvider.class) {
 
@@ -323,7 +328,8 @@ public class InfinispanUserSessionProviderFactory implements UserSessionProvider
 
     @Override
     public boolean isSupported(Config.Scope config) {
-        return InfinispanUtils.isEmbeddedInfinispan() || MultiSiteUtils.isPersistentSessionsEnabled();
+        return (InfinispanUtils.isEmbeddedInfinispan() || MultiSiteUtils.isPersistentSessionsEnabled())
+                && !"redis".equals(config.root().get("cache"));
     }
 
     @Override

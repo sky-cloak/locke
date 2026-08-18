@@ -1,0 +1,67 @@
+# B3: Locke 26.6.1-1, KC_CACHE=redis, shared Redis (pub/sub, no JGroups).
+# Same topology/resources/heap as A3 for an apples-to-apples comparison.
+apiVersion: v1
+kind: Service
+metadata: { name: kc-b3-headless, namespace: locke-bench }
+spec:
+  clusterIP: None
+  selector: { app: kc-b3 }
+  ports: [ { name: http, port: 8080 } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: kc-b3, namespace: locke-bench }
+spec:
+  selector: { app: kc-b3 }
+  ports: [ { name: http, port: 8080, targetPort: 8080 } ]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: kc-b3, namespace: locke-bench }
+spec:
+  serviceName: kc-b3-headless
+  replicas: 3
+  selector: { matchLabels: { app: kc-b3 } }
+  template:
+    metadata: { labels: { app: kc-b3 } }
+    spec:
+      nodeSelector: { bench-role: kc }
+      imagePullSecrets: [ { name: ghcr-pull } ]
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector: { matchLabels: { app: kc-b3 } }
+      containers:
+        - name: keycloak
+          image: ghcr.io/sky-cloak/locke:26.6.1-1
+          args: ["start-dev", "--hostname-strict=false", "--import-realm", "--health-enabled=true"]
+          env:
+            - { name: KC_DB, value: postgres }
+            - { name: KC_DB_URL, value: "jdbc:postgresql://postgres:5432/keycloak" }
+            - { name: KC_DB_USERNAME, value: keycloak }
+            - { name: KC_DB_PASSWORD, value: keycloak }
+            - { name: KC_DB_POOL_MAX_SIZE, value: "50" }
+            - { name: KC_CACHE, value: redis }
+            - { name: KC_CACHE_REDIS_URL, value: "redis://redis:6379" }
+            - { name: KC_METRICS_ENABLED, value: "true" }
+            - { name: KC_BOOTSTRAP_ADMIN_USERNAME, value: admin }
+            - { name: KC_BOOTSTRAP_ADMIN_PASSWORD, value: admin }
+            - { name: JAVA_OPTS_APPEND, value: "-Xms1g -Xmx3g" }
+          ports: [ { name: http, containerPort: 8080 } ]
+          resources:
+            requests: { cpu: "2", memory: 2Gi }
+            limits: { memory: 4Gi }
+          readinessProbe:
+            httpGet: { path: /health/ready, port: 9000 }
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            failureThreshold: 60
+          volumeMounts:
+            - { name: realm, mountPath: /opt/keycloak/data/import, readOnly: true }
+            - { name: dataset, mountPath: /opt/keycloak/providers/keycloak-benchmark-dataset.jar, subPath: keycloak-benchmark-dataset.jar, readOnly: true }
+      volumes:
+        - name: realm
+          configMap: { name: bench-realm }
+        - name: dataset
+          configMap: { name: dataset-provider }

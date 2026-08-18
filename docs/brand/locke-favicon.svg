@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" fill="none">
+  <defs>
+    <mask id="bore-fav" maskUnits="userSpaceOnUse" x="0" y="0" width="240" height="240">
+      <rect width="240" height="240" fill="white"></rect>
+      <circle cx="94" cy="178" r="7" fill="black"></circle>
+    </mask>
+  </defs>
+  <g fill="currentColor" mask="url(#bore-fav)">
+    <rect x="72" y="40" width="44" height="160" rx="22"></rect>
+    <rect x="72" y="156" width="130" height="44" rx="22"></rect>
+  </g>
+</svg>

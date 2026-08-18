@@ -1,0 +1,142 @@
+/*
+ * Copyright 2026 Red Hat, Inc. and/or its affiliates
+ * and other contributors as indicated by the @author tags.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.keycloak.crl.redis;
+
+import java.security.cert.X509CRL;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
+
+import org.keycloak.Config;
+import org.keycloak.crl.CrlStorageProvider;
+import org.keycloak.crl.CrlStorageProviderFactory;
+import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.KeycloakSessionFactory;
+import org.keycloak.provider.EnvironmentDependentProviderFactory;
+import org.keycloak.provider.ProviderConfigProperty;
+import org.keycloak.provider.ProviderConfigurationBuilder;
+
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+
+/**
+ * Redis-mode CRL storage factory. Active when {@code KC_CACHE=redis}; the Infinispan factory
+ * is disabled in that mode, so this becomes the sole {@code CrlStorageProvider} and X.509 CRL
+ * revocation checking keeps working under redis (docs/adr/0004).
+ */
+public class RedisCrlStorageProviderFactory implements CrlStorageProviderFactory, EnvironmentDependentProviderFactory {
+
+    public static final String PROVIDER_ID = "redis";
+
+    /** Cluster task key for the admin "clear CRL cache" fan-out. */
+    public static final String CRL_CLEAR_CACHE_EVENTS = "CRL_CLEAR_CACHE_EVENTS";
+
+    private volatile Cache<String, CrlEntry> crlCache;
+    private final Map<String, FutureTask<X509CRL>> tasksInProgress = new ConcurrentHashMap<>();
+    private volatile long cacheTime;
+    private volatile long minTimeBetweenRequests;
+
+    @Override
+    public CrlStorageProvider create(KeycloakSession session) {
+        lazyInit();
+        return new RedisCrlStorageProvider(crlCache, tasksInProgress, cacheTime, minTimeBetweenRequests);
+    }
+
+    @Override
+    public List<ProviderConfigProperty> getConfigMetadata() {
+        return ProviderConfigurationBuilder.create()
+                .property()
+                    .name("cacheTime")
+                    .type("int")
+                    .helpText(
+                            """
+                            Interval in seconds that the CRL is cached. The next update time of the CRL is always a minimum if present.
+                            Zero or a negative value means CRL is cached until the next update time specified in the CRL (or infinite if the
+                            CRL does not contain the next update).
+                            """
+                    )
+                    .defaultValue(-1)
+                    .add()
+                .property()
+                    .name("minTimeBetweenRequests")
+                    .type("int")
+                    .helpText(
+                            """
+                            Minimum interval in seconds between two requests to retrieve the CRL. The CRL is not updated
+                            from the URL again until this minimum time has passed since the previous refresh. In theory
+                            this option is never used if the CRL is refreshed correctly in the next update time.
+                            The interval should be a positive number. Default 10 seconds.
+                            """
+                    )
+                    .defaultValue(10)
+                    .add()
+                .build();
+    }
+
+    @Override
+    public void init(Config.Scope config) {
+        final long tmpCacheTime = config.getLong("cacheTime", -1L);
+        cacheTime = tmpCacheTime > 0 ? TimeUnit.SECONDS.toMillis(tmpCacheTime) : -1L;
+
+        final long tmpMinTimeBetweenRequests = config.getLong("minTimeBetweenRequests", 10L);
+        minTimeBetweenRequests = tmpMinTimeBetweenRequests > 0 ? TimeUnit.SECONDS.toMillis(tmpMinTimeBetweenRequests) : 10_000L;
+    }
+
+    @Override
+    public void postInit(KeycloakSessionFactory factory) {
+        // no-op
+    }
+
+    /** Drops this node's cached CRLs. Fanning the clear out to the other nodes is the
+     *  {@link RedisCacheCrlProvider}'s job. */
+    public void clearCache() {
+        lazyInit();
+        crlCache.invalidateAll();
+    }
+
+    @Override
+    public void close() {
+        // no-op
+    }
+
+    @Override
+    public String getId() {
+        return PROVIDER_ID;
+    }
+
+    @Override
+    public boolean isSupported(Config.Scope config) {
+        return "redis".equals(config.root().get("cache"));
+    }
+
+    private void lazyInit() {
+        if (crlCache == null) {
+            synchronized (this) {
+                if (crlCache == null) {
+                    Caffeine<Object, Object> builder = Caffeine.newBuilder().maximumSize(10_000);
+                    if (cacheTime > 0) {
+                        builder.expireAfterWrite(cacheTime, TimeUnit.MILLISECONDS);
+                    }
+                    this.crlCache = builder.build();
+                }
+            }
+        }
+    }
+}

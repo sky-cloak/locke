@@ -52,7 +52,8 @@ public class KeycloakClusterReadyHealthCheckProducer {
                 return instance;
             }
             var factory = (InfinispanConnectionProviderFactory) sessionFactory.getProviderFactory(InfinispanConnectionProvider.class);
-            if (factory.isClusterHealthSupported()) {
+            // Locke: factory is null when KC_CACHE=redis (no Infinispan), guard against NPE
+            if (factory != null && factory.isClusterHealthSupported()) {
                 instance = new KeycloakClusterReadyHealthCheck(factory);
             }
             ready = true;

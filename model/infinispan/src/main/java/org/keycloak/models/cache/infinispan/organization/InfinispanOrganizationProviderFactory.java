@@ -17,6 +17,7 @@
 
 package org.keycloak.models.cache.infinispan.organization;
 
+import org.keycloak.Config;
 import org.keycloak.Config.Scope;
 import org.keycloak.models.GroupModel;
 import org.keycloak.models.IdentityProviderModel;
@@ -28,8 +29,9 @@ import org.keycloak.models.UserModel;
 import org.keycloak.organization.OrganizationProvider;
 import org.keycloak.organization.OrganizationProviderFactory;
 import org.keycloak.organization.utils.Organizations;
+import org.keycloak.provider.EnvironmentDependentProviderFactory;
 
-public class InfinispanOrganizationProviderFactory implements OrganizationProviderFactory {
+public class InfinispanOrganizationProviderFactory implements OrganizationProviderFactory, EnvironmentDependentProviderFactory {
 
     public static final String PROVIDER_ID = "infinispan";
 
@@ -127,5 +129,10 @@ public class InfinispanOrganizationProviderFactory implements OrganizationProvid
     @Override
     public int order() {
         return 10;
+    }
+
+    @Override
+    public boolean isSupported(Config.Scope config) {
+        return !"redis".equals(config.root().get("cache"));
     }
 }
