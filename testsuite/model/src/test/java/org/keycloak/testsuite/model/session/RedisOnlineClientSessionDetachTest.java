@@ -121,6 +121,48 @@ public class RedisOnlineClientSessionDetachTest extends KeycloakModelTest {
         });
     }
 
+    /**
+     * The second half of RFC 7009 revocation: once the detached client session was the last one,
+     * {@code TokenRevocationEndpoint} drops the whole user session, which is what kills SSO. It
+     * decides that with {@code userSession.getAuthenticatedClientSessions().isEmpty()} on the same
+     * in-memory user session it just detached from — so that view has to reflect the detach.
+     *
+     * <p>The persister's client-session map is latched on first read
+     * ({@code ClientSessionLoader}), so without filtering it still reports the detached session
+     * and the user session survives. The observable effect is that the browser's SSO cookie keeps
+     * minting fresh tokens for the revoked client without re-authentication.
+     */
+    @Test
+    public void detachingTheLastClientSessionEmptiesTheUserSessionView() {
+        String userSessionId = inComittedTransaction(session -> {
+            RealmModel realm = session.realms().getRealm(realmId);
+            session.getContext().setRealm(realm);
+            UserModel user = session.users().getUserByUsername(realm, "user1");
+            ClientModel client = realm.getClientByClientId("test-app");
+
+            UserSessionModel userSession = session.sessions().createUserSession(null, realm, user, "user1",
+                    "127.0.0.1", "form", false, null, null,
+                    UserSessionModel.SessionPersistenceState.PERSISTENT);
+            session.sessions().createClientSession(realm, client, userSession);
+            return userSession.getId();
+        });
+
+        // One transaction, mirroring the endpoint: resolve, detach, then re-check the same object.
+        inComittedTransaction(session -> {
+            RealmModel realm = session.realms().getRealm(realmId);
+            session.getContext().setRealm(realm);
+            ClientModel client = realm.getClientByClientId("test-app");
+            UserSessionModel userSession = session.sessions().getUserSession(realm, userSessionId);
+
+            AuthenticatedClientSessionModel clientSession =
+                    userSession.getAuthenticatedClientSessionByClient(client.getId());
+            clientSession.detachFromUserSession();
+
+            assertThat("the detached client session must not still count towards the user session",
+                    userSession.getAuthenticatedClientSessions().keySet(), Matchers.empty());
+        });
+    }
+
     private AuthenticatedClientSessionModel findClientSession(KeycloakSession session, String userSessionId) {
         RealmModel realm = session.realms().getRealm(realmId);
         session.getContext().setRealm(realm);

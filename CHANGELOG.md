@@ -30,6 +30,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   by detaching the client session, but the JPA persister only deletes the stored row for
   offline sessions — upstream keeps online sessions in Infinispan, while Locke persists
   them. Detaching an online client session now removes it.
+- Revoking a session's last refresh token left the SSO session alive under
+  `KC_CACHE=redis`, so the browser could silently obtain new tokens for the revoked client
+  without re-authenticating. The endpoint drops the user session once no client sessions
+  remain, but the persister latches its client-session map on first read, so the detached
+  session was still counted. Detached sessions are now excluded from that view, matching
+  upstream: revoking the last token ends SSO. Revoking one client still leaves other
+  clients on the same session untouched.
 
 ## [26.7.0-1] - 2026-07-10
 

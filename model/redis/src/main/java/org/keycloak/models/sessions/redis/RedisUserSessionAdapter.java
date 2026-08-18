@@ -105,7 +105,13 @@ class RedisUserSessionAdapter implements OfflineUserSessionModel {
         Map<String, AuthenticatedClientSessionModel> map = delegate.getAuthenticatedClientSessions();
         map.entrySet().removeIf(entry -> {
             ClientModel client = entry.getValue().getClient();
-            return client == null || isClientSessionExpired(realm, client, this, entry.getValue(), offline);
+            // A detached client session has no user session any more. The persister latches this
+            // map on first read, so a detach performed later in the same request would otherwise
+            // still be counted here — and callers use isEmpty() to decide whether the user session
+            // itself should go (TokenRevocationEndpoint), which is what ends SSO.
+            return client == null
+                    || entry.getValue().getUserSession() == null
+                    || isClientSessionExpired(realm, client, this, entry.getValue(), offline);
         });
         for (Map.Entry<String, AuthenticatedClientSessionModel> entry : map.entrySet()) {
             if (!(entry.getValue() instanceof AutoPersistingClientSessionAdapter)) {
