@@ -8,6 +8,17 @@ the Percona Server / Amazon Corretto convention.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [26.7.1-1] - 2026-08-18
+
+### Changed
+- Built from Keycloak 26.7.1, a security release. It carries upstream fixes for
+  fine-grained admin permission bypasses (CVE-2026-14614), a metrics-cardinality
+  OOM (CVE-2026-16100), a JWE request-object signature bypass, an authorization
+  bypass via mutated paths, and SAML, LDAP and WebAuthn hardening. See the
+  upstream release notes for the full list.
+- No Locke-side changes: the Redis backend rebased onto 26.7.1 with no conflicts
+  and no SPI changes to absorb.
+
 ## [26.7.0-1] - 2026-07-10
 
 ### Changed

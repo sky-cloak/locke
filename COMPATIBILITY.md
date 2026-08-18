@@ -15,7 +15,7 @@ from, plus an independent build number.
 
 `26.6.1-1` means "this is Keycloak 26.6.1, Locke build 1." A later Locke-only fix
 on the same Keycloak base would be `26.6.1-2`. When we rebase onto Keycloak
-26.7.0, the next release is `26.7.0-1`.
+26.7.1, the next release is `26.7.1-1`.
 
 This makes the upstream version unambiguous from the Locke version alone, which
 matters for matching CVE advisories and upstream release notes.
@@ -24,8 +24,13 @@ matters for matching CVE advisories and upstream release notes.
 
 | Locke | Keycloak base | Container image | Status |
 |---|---|---|---|
-| `26.6.1-1` | 26.6.1 | `ghcr.io/sky-cloak/locke:26.6.1-1` | current |
-| `26.3.5-1` | 26.3.5 | `ghcr.io/sky-cloak/locke:26.3.5-1` | previous |
+| `26.7.1-1` | 26.7.1 | `ghcr.io/sky-cloak/locke:26.7.1-1` | current |
+| `26.7.0-1` | 26.7.0 | `ghcr.io/sky-cloak/locke:26.7.0-1` | superseded |
+| `26.6.4-4` | 26.6.4 | `ghcr.io/sky-cloak/locke:26.6.4-4` | superseded |
+| `26.6.3-3` | 26.6.3 | `ghcr.io/sky-cloak/locke:26.6.3-3` | superseded |
+| `26.6.2-3` | 26.6.2 | `ghcr.io/sky-cloak/locke:26.6.2-3` | superseded |
+| `26.6.1-2` | 26.6.1 | `ghcr.io/sky-cloak/locke:26.6.1-2` | maintained |
+| `26.3.5-3` | 26.3.5 | `ghcr.io/sky-cloak/locke:26.3.5-3` | maintained |
 
 ## What "compatible" means
 

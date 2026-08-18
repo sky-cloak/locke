@@ -5,7 +5,8 @@
 #   ./scripts/bump-release-versions.sh 26.6.5-1
 #
 # Touches: CHANGELOG.md (new section stub), README.md (compat badge, quickstart
-# image tags, compatibility table), docs/redis-security.md (image tags, version line).
+# image tags, compatibility table), COMPATIBILITY.md (matrix row, versioning example),
+# docs/redis-security.md (image tags, version line).
 # Leaves the changes uncommitted so they can be reviewed/amended.
 set -euo pipefail
 
@@ -28,10 +29,15 @@ perl -pi -e "s{(img.shields.io/badge/Keycloak-)[0-9.]+(-blue)}{\${1}$UPSTREAM\${
 perl -pi -e "s{(ghcr.io/sky-cloak/locke:)[0-9.-]+( start-dev)}{\${1}$VERSION\${2}}g" README.md
 perl -0pi -e "s{\\| \`([0-9.-]+)\` \\| ([0-9.]+) \\| current \\|}{| \`$VERSION\` | $UPSTREAM | current |\n| \`\$1\` | \$2 | superseded |}s" README.md
 
+# COMPATIBILITY.md: same current -> superseded promotion as the README table, plus the
+# versioning example line. Kept here so the matrix cannot drift release over release.
+perl -0pi -e "s{\\| \`([0-9.-]+)\` \\| ([0-9.]+) \\| \`ghcr.io/sky-cloak/locke:[0-9.-]+\` \\| current \\|}{| \`$VERSION\` | $UPSTREAM | \`ghcr.io/sky-cloak/locke:$VERSION\` | current |\n| \`\$1\` | \$2 | \`ghcr.io/sky-cloak/locke:\$1\` | superseded |}s" COMPATIBILITY.md
+perl -0pi -e "s{(When we rebase onto Keycloak\n)[0-9.]+(, the next release is \`)[0-9.-]+(\`)}{\${1}$UPSTREAM\${2}$VERSION\${3}}s" COMPATIBILITY.md
+
 # docs/redis-security.md: image tags + the "available in Locke X" line.
 perl -pi -e "s{(ghcr.io/sky-cloak/locke:)[0-9.-]+( start-dev)}{\${1}$VERSION\${2}}g" docs/redis-security.md
 perl -pi -e "s{available in Locke \`[0-9.-]+\`}{available in Locke \`$VERSION\`}" docs/redis-security.md
 
 echo "Bumped to $VERSION (upstream $UPSTREAM):"
-git diff --stat -- CHANGELOG.md README.md docs/redis-security.md | sed 's/^/  /'
+git diff --stat -- CHANGELOG.md README.md COMPATIBILITY.md docs/redis-security.md | sed 's/^/  /'
 echo "Review the CHANGELOG stub, then commit with: git commit -am 'release: Locke $VERSION'"
