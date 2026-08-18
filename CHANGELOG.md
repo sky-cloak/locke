@@ -16,8 +16,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   OOM (CVE-2026-16100), a JWE request-object signature bypass, an authorization
   bypass via mutated paths, and SAML, LDAP and WebAuthn hardening. See the
   upstream release notes for the full list.
-- No Locke-side changes: the Redis backend rebased onto 26.7.1 with no conflicts
-  and no SPI changes to absorb.
+- The Redis backend rebased onto 26.7.1 with no conflicts and no SPI changes to absorb.
+
+### Fixed
+- Locke failed to start whenever the cache was **not** Redis (the default), with
+  `Duplicate definition of keycloak.ResourceUpdatedEvent`. The Redis protostream schema
+  was published as a `ServiceLoader` service, so Infinispan's global serialization
+  registry loaded it alongside its own schema; the two deliberately share a package and
+  type ids. The Redis schema is no longer published as a service — it is registered
+  explicitly, as it always was, so stored data is unaffected.
+- Refresh-token revocation (RFC 7009) silently did nothing under `KC_CACHE=redis`:
+  `/revoke` returned 200 and the token stayed usable until it expired. Revocation works
+  by detaching the client session, but the JPA persister only deletes the stored row for
+  offline sessions — upstream keeps online sessions in Infinispan, while Locke persists
+  them. Detaching an online client session now removes it.
 
 ## [26.7.0-1] - 2026-07-10
 

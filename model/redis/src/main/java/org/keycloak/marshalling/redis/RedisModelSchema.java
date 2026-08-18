@@ -88,6 +88,10 @@ import org.keycloak.models.cache.redis.stream.InRealmPredicate;
         allowNullFields = true,
         orderedMarshallers = true,
         dependsOn = CommonTypes.class,
+        // Not a ServiceLoader service: this schema shares its package and type ids with the
+        // Infinispan one, so Infinispan's global SerializationContextRegistry would fail to
+        // build if it discovered both. ProtobufRedisSerializer registers this explicitly.
+        service = false,
 
         includeClasses = {
                 // clustering.redis package

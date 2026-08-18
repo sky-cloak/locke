@@ -109,8 +109,43 @@ class AutoPersistingClientSessionAdapter implements AuthenticatedClientSessionMo
         persist();
     }
 
+    /**
+     * Upstream's persister adapter deletes the stored row only for offline sessions; for online
+     * ones it just clears an in-memory field, because upstream keeps online sessions in Infinispan
+     * rather than the database. Locke persists them, so the row has to go too — otherwise the next
+     * request loads the client session straight back and RFC 7009 revocation silently no-ops
+     * ({@code TokenRevocationEndpoint.revokeClientSession()} revokes by detaching, never by
+     * writing to the revoked-token store).
+     */
     @Override
-    public void detachFromUserSession() { delegate.detachFromUserSession(); }
+    public void detachFromUserSession() {
+        UserSessionModel userSession = delegate.getUserSession();
+        String userSessionId = userSession == null ? null : userSession.getId();
+        ClientModel client = delegate.getClient();
+        String clientUUID = client == null ? null : client.getId();
+
+        delegate.detachFromUserSession();
+
+        if (!offline && userSessionId != null && clientUUID != null) {
+            removeFromStore(userSessionId, clientUUID);
+        }
+    }
+
+    private void removeFromStore(String userSessionId, String clientUUID) {
+        for (int attempt = 0; ; attempt++) {
+            try {
+                KeycloakModelUtils.runJobInTransaction(factory,
+                        s -> s.getProvider(UserSessionPersisterProvider.class)
+                                .removeClientSession(userSessionId, clientUUID, false));
+                return;
+            } catch (RuntimeException e) {
+                if (attempt >= PERSIST_RETRIES || !isRetryableConflict(e)) {
+                    throw e;
+                }
+                backoff(attempt, e);
+            }
+        }
+    }
 
     @Override
     public UserSessionModel getUserSession() { return delegate.getUserSession(); }
