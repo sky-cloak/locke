@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[Locke] Evaluate patch-overlay model vs vendored upstream history</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --fg: #1c1f24;
+    --muted: #5b6572;
+    --rule: #d9dee5;
+    --code-bg: #f4f6f8;
+    --accent: #2b5d8a;
+    --pick-bg: #eaf3ea;
+    --pick-border: #4a7c4a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171b;
+      --fg: #e4e7ea;
+      --muted: #9aa3ad;
+      --rule: #2c333b;
+      --code-bg: #1d2228;
+      --accent: #7fb3dd;
+      --pick-bg: #1b271c;
+      --pick-border: #4f7f4f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    padding: 2.5rem 1.25rem 5rem;
+  }
+  main { max-width: 62rem; margin: 0 auto; }
+  h1 { font-size: 1.7rem; line-height: 1.3; margin: 0 0 1.5rem; }
+  h2 { font-size: 1.3rem; margin: 2.6rem 0 0.9rem; padding-bottom: 0.35rem; border-bottom: 1px solid var(--rule); }
+  h3 { font-size: 1.05rem; margin: 1.8rem 0 0.6rem; }
+  p, li { margin: 0.6rem 0; }
+  ul, ol { padding-left: 1.4rem; }
+  a { color: var(--accent); }
+  code {
+    background: var(--code-bg);
+    padding: 0.1em 0.35em;
+    border-radius: 3px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.88em;
+    overflow-wrap: anywhere;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    padding: 0.9rem 1rem;
+    overflow-x: auto;
+  }
+  pre code { background: none; padding: 0; font-size: 0.82rem; }
+  table { border-collapse: collapse; width: 100%; margin: 1.1rem 0; font-size: 0.92rem; }
+  th, td { border: 1px solid var(--rule); padding: 0.5rem 0.65rem; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; }
+  .options-table td:first-child { width: 15%; font-weight: 600; }
+  .pick { background: var(--pick-bg); }
+  .note { color: var(--muted); font-size: 0.92rem; }
+  .lead { color: var(--muted); margin-bottom: 2rem; }
+  blockquote {
+    margin: 1rem 0; padding: 0.2rem 0 0.2rem 1rem;
+    border-left: 3px solid var(--rule); color: var(--muted);
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>[Locke] Evaluate patch-overlay model vs vendored upstream history: should Locke stop vendoring Keycloak's source tree and carry only a patch series against a pinned tag?</h1>
+<p class="lead">SKYCF-537, exploration. Decision only, no code or build changes land from this ticket.</p>
+
+<h2>The question</h2>
+<p>SKYCF-537 asks whether Locke should move from its current model (<code>main</code> = upstream Keycloak tag plus the Locke patch, continuously rebased, full upstream tree vendored) to a patch-overlay model (the repo holds only <code>model/redis/</code> plus a patch series for the patched upstream files, applied at build time against a pinned Keycloak tag), and to recommend adopt, keep current, or hybrid.</p>
+<p>Four sub-questions were asked and all four are answered below:</p>
+<ol>
+  <li>Does an overlay break or strengthen the "rebased against upstream daily" story in <code>WHY.md</code> / <code>README.md</code>?</li>
+  <li>How do the in-tree upstream-file patches translate to a patch series, and how often do they conflict on upstream churn?</li>
+  <li>Build mechanics: apply patches plus add <code>model/redis</code> at build time, versus the current Maven-module-in-tree approach.</li>
+  <li>Migration cost, and whether to sequence it before or after the Keycloak 27.x rebase (SKYCF-391).</li>
+</ol>
+<p>Explicitly out of scope: this ticket is decision-only. No code, build, workflow, or config change lands from it. The only artifacts are this document and its Markdown twin. Implementation, if the recommendation is accepted, is separate tickets (listed at the end).</p>
+
+<h2>What we have today</h2>
+
+<p><strong>The shape of the fork.</strong> <code>main</code> is an upstream Keycloak release commit with the Locke patch replayed on top. Against the 26.7.1 base (<code>73f08b397f</code>, "Set version to 26.7.1"), the Locke delta is 409 changed files: 377 new files that are entirely Locke's, and 22 modified upstream source files plus 4 build/doc files. Broken down by area, the new files are 240 in <code>model/redis/</code>, 79 in <code>benchmark/</code>, 30 in <code>docs/</code>, 8 in <code>.github/</code>, 5 in <code>tests/</code>, 5 in <code>scripts/</code>, 3 in <code>testsuite/</code>, and 1 in <code>quarkus/</code>.</p>
+
+<p><strong>The patched upstream surface</strong> (the ticket estimated "~13"; the real number is 22 source files plus 4 build files, and it has been exactly 22 across all six releases I measured):</p>
+<ul>
+  <li>18 files under <code>model/infinispan/src/main/java/</code>, almost all one-line <code>isSupported()</code> guards. Example: <code>InfinispanClusterProviderFactory.java:157</code> adds <code>&amp;&amp; !"redis".equals(config.root().get("cache"))</code>; <code>InfinispanUserSessionProviderFactory.java</code> adds the same guard plus a null-<code>ClusterProvider</code> early return. <code>CacheManager.java:219</code> null-guards <code>sendInvalidationEvents</code>. Fourteen of the eighteen are 7 changed lines or fewer.</li>
+  <li><code>quarkus/config-api/src/main/java/org/keycloak/config/CachingOptions.java</code> (+74/-2): adds <code>redis</code> to the mechanism enum (<code>CachingOptions.java:44</code>) and nine <code>cache-redis-*</code> options (<code>CachingOptions.java:193</code> onward).</li>
+  <li><code>quarkus/runtime/.../mappers/CachingPropertyMappers.java</code> (+51): nine property mappers appended to a list literal (<code>CachingPropertyMappers.java:170-215</code>) plus a <code>cacheSetToRedis()</code> predicate.</li>
+  <li><code>quarkus/deployment/.../KeycloakProcessor.java</code> (+23/-2): the conditional Jandex index build step (<code>KeycloakProcessor.java:824</code>) and the cluster health-check suppression (<code>KeycloakProcessor.java:846</code>).</li>
+  <li><code>quarkus/runtime/.../health/KeycloakClusterReadyHealthCheckProducer.java</code> (+2/-1).</li>
+  <li>Build wiring: <code>model/pom.xml:39</code> (<code>&lt;module&gt;redis&lt;/module&gt;</code>), <code>pom.xml:1048</code> (dependencyManagement entry), <code>quarkus/runtime/pom.xml:290</code> (the runtime dependency), <code>testsuite/model/pom.xml</code> (+44, the <code>jpa+redis</code> conformance profile), and <code>model/infinispan/pom.xml:130</code> (a <code>&lt;skip&gt;true&lt;/skip&gt;</code> on upstream's network-dependent proto-lock check).</li>
+</ul>
+<p>Total: about 700 diff lines across 22 files, against a 13,282-file repository.</p>
+
+<p><strong>The release ritual.</strong> <code>scripts/rebase-onto.sh</code> squashes every Locke commit into one (<code>:31-41</code>), rebases it onto the target tag (<code>:44</code>), bumps <code>model/redis/pom.xml</code>'s parent version (<code>:56</code>), strips upstream's inherited <code>dependabot.yml</code> (<code>:66-69</code>), then gates on <code>mvnw -pl model/redis -am compile</code> (<code>:74</code>) and <code>mvnw -pl quarkus/dist -am install</code> (<code>:96</code>). <code>.github/workflows/locke-bump.yml</code> wraps that, and its own PR body states the friction the ticket describes:</p>
+<blockquote>"This branch sits on the <code>$TARGET</code> upstream tag, so its base diverges from main: do NOT merge via GitHub. Once CI is green, promote by force-updating main (unlock/relock allow_force_pushes), then tag" (<code>locke-bump.yml:96</code>)</blockquote>
+<p>followed by a literal <code>git push --force-with-lease origin locke-$TARGET:main</code> (<code>locke-bump.yml:99</code>).</p>
+
+<p><strong>The daily job.</strong> <code>.github/workflows/locke-rebase-test.yml</code> runs at 06:00 UTC (<code>:12</code>), rebases onto the newest plain <code>X.Y.Z</code> upstream tag, and auto-resolves every conflict outside a care-list regex by keeping Locke's side, because "a rebase onto a different release always conflicts on <code>&lt;version&gt;</code> strings across poms; that is noise" (<code>:42-46</code>). It does not build and does not test. The care-list (<code>:46</code>) is the patch surface named above.</p>
+
+<p><strong>The team already optimises for rebase cleanliness.</strong> <code>.github/disable-upstream-workflows.sh:5-8</code> explains that upstream's 18 workflow files are disabled through the GitHub API rather than deleted, specifically so "the files stay byte-identical to upstream and rebases stay clean."</p>
+
+<p><strong>How big the "spurious" PR diff actually is.</strong> Measured, tag to tag:</p>
+<table>
+  <thead><tr><th>Bump</th><th>GitHub PR diff</th><th>Of which is pure upstream churn</th><th>Upstream commits</th></tr></thead>
+  <tbody>
+    <tr><td>26.6.1-1 to 26.6.2-1</td><td>334 files</td><td>333 files</td><td>41</td></tr>
+    <tr><td>26.6.2-1 to 26.6.3-1</td><td>515 files</td><td>419 files</td><td>60</td></tr>
+    <tr><td>26.6.3-1 to 26.6.4-1</td><td>318 files</td><td>220 files</td><td>16</td></tr>
+    <tr><td>26.6.4-1 to 26.7.0-1</td><td>3,930 files</td><td>3,894 files</td><td>877</td></tr>
+    <tr><td>26.7.0-1 to 26.7.1-1</td><td>268 files</td><td>257 files</td><td>24</td></tr>
+  </tbody>
+</table>
+<p>So the complaint is real and quantified: on the 26.7.0 bump, 3,894 of 3,930 changed files were upstream's, and Locke's own reviewable delta was about 36 files.</p>
+
+<p><strong>How often the patch actually conflicts.</strong> I extracted the patch series (the 22 upstream files only) at each of six Locke releases and replayed each one onto the <em>next</em> release's upstream base, which is exactly what a quilt-style refresh would face:</p>
+<table>
+  <thead><tr><th>Transition</th><th><code>git apply</code> (strict)</th><th><code>git apply --3way</code></th><th>plain <code>patch</code> (quilt)</th></tr></thead>
+  <tbody>
+    <tr><td>26.6.1 to 26.6.2</td><td>clean</td><td>n/a</td><td>clean</td></tr>
+    <tr><td>26.6.2 to 26.6.3</td><td>clean</td><td>n/a</td><td>clean</td></tr>
+    <tr><td>26.6.3 to 26.6.4</td><td>clean</td><td>n/a</td><td>clean</td></tr>
+    <tr><td>26.6.4 to 26.7.0</td><td>fails, 8 files</td><td><strong>clean</strong></td><td>11 hunks FAILED, 21 fuzzed/offset</td></tr>
+    <tr><td>26.7.0 to 26.7.1</td><td>clean</td><td>n/a</td><td>clean</td></tr>
+    <tr><td>26.7.1 to 26.7.2 (live)</td><td><strong>clean</strong></td><td>n/a</td><td>clean</td></tr>
+    <tr><td>26.7.1 to upstream <code>main</code> @ ae1a3705, 2026-08-28 (live)</td><td><strong>clean</strong></td><td>n/a</td><td>clean, 0 failed hunks</td></tr>
+  </tbody>
+</table>
+<p>Zero human conflict resolutions across five real upstream bumps, including one minor-version jump of 877 commits. The one hard case was resolved entirely by git's three-way merge, which the current rebase model already gets for free and which plain <code>patch</code>/quilt could not do. Underlying churn on the patched files is modest: over the 12 months to 2026-08-30 the busiest patched file is <code>KeycloakProcessor.java</code> at 32 upstream commits, then <code>InfinispanUserSessionProviderFactory.java</code> at 12 and <code>DefaultInfinispanConnectionProviderFactory.java</code> at 11; the median patched file saw 3.</p>
+
+<p><strong>Build mechanics today.</strong> <code>model/redis</code> is a normal Maven module of upstream's reactor (<code>model/pom.xml:39</code>), consumed by <code>quarkus/runtime</code> (<code>quarkus/runtime/pom.xml:290</code>) and indexed conditionally at build time (<code>KeycloakProcessor.java:824</code>). CI builds <code>./mvnw -pl model/redis -am install</code> (<code>locke-pr.yml:26</code>), runs upstream's own model conformance suite against Redis with <code>./mvnw -pl testsuite/model -B test -Pjpa+redis</code> (<code>locke-pr.yml:49</code>, the ADR-0004 parity gate), and releases with <code>./mvnw -pl quarkus/dist -am install</code> (<code>locke-release.yml:42</code>).</p>
+
+<p><strong>The public story.</strong> <code>WHY.md:99-101</code> says Locke is "Not a hard fork. We carry a focused patch set (a handful of upstream files plus a self-contained <code>model/redis/</code> module) on top of upstream <code>main</code>, and a CI job rebases and tests against upstream daily." <code>README.md:83-85</code> positions Locke's composite versioning as "the Percona Server / Amazon Corretto convention."</p>
+
+<h2>Options</h2>
+
+<table class="options-table">
+  <thead>
+    <tr><th>Option</th><th>What it means</th><th>Effort / cost</th><th>Risk</th><th>What it breaks</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>A. Keep current (do-nothing)</td>
+      <td>Continue vendoring the full upstream tree, rebasing the squashed patch on each release, force-updating <code>main</code> behind a manual branch-protection toggle, living with the cross-base PR.</td>
+      <td>Zero effort, zero new spend.</td>
+      <td>The force-push of a protected public default branch stays a manual, unaudited step (<code>locke-bump.yml:96-99</code>). A bump is not really reviewed: the signal is ~36 files inside a 268-to-3,930-file diff, so it is trusted to CI.</td>
+      <td>Nothing new, but leaves the accuracy gap in <code>WHY.md:101</code>: the daily job auto-resolves everything outside its care-list, never builds and never tests, so "rebases and tests against upstream daily" claims more than it delivers. Still genuinely defensible: measured conflict cost is zero, and both distributions Locke names as its model (Percona, Corretto) vendor the full tree.</td>
+    </tr>
+    <tr>
+      <td>B. Full patch-overlay repo (Debian / Fedora / Brave)</td>
+      <td>Repo holds <code>model/redis/</code>, <code>benchmark/</code>, <code>docs/</code>, the <code>locke-*</code> workflows, a pinned upstream tag and a <code>patches/</code> series. Build fetches Keycloak at the tag, applies the series, drops <code>model/redis</code> in, runs Maven. A bump is a normal forward commit: no force-push, no cross-base PR.</td>
+      <td>3 to 5 agent-days plus one elevated-risk release cycle. All 7 <code>locke-*.yml</code> workflows and 5 <code>scripts/*.sh</code> (~1,500 lines) assume an in-tree reactor, as do <code>benchmark/k8s/images/*</code>, <code>docker-compose-redis.yml</code> and the container staging in <code>locke-release.yml:56-69</code>. No vendor spend; CI is <em>cheaper</em>: a measured <code>git clone --depth 1 --branch 26.7.1</code> of keycloak/keycloak takes 6.0 s and 51 MB of pack versus the 545 MB of history today's <code>fetch-depth: 0</code> job pulls.</td>
+      <td>Must apply with git three-way, not quilt: on the one hard bump, plain <code>patch</code> failed 11 hunks while <code>git apply --3way</code> was clean, so both old and new upstream tags must stay fetched. Keycloak publishes no source tarball, so the build leans on a git fetch or GitHub auto-archives, whose byte stability is only promised with six months' notice. <code>git blame</code> and IDE navigation over upstream sources are lost.</td>
+      <td><code>git clone &amp;&amp; ./mvnw install</code> stops working offline, a real ergonomic and Apache-2.0-optics loss for a distribution whose pitch is "the code is Keycloak." The <code>-Pjpa+redis</code> gate needs a patched <code>testsuite/model/pom.xml</code>, so the full tree is materialised on every CI run anyway. And it does not buy what the ticket hoped: conflict frequency is already zero, so it removes ceremony, not merge work.</td>
+    </tr>
+    <tr class="pick">
+      <td>C. Hybrid: keep the tree, fix the ritual <strong>(recommended)</strong></td>
+      <td>(1) Generate and publish the patch series as a <code>patches/</code> directory per release. (2) Replace the daily rebase job with a shallow-clone <code>git apply --check</code> against the latest upstream release, and optionally against <code>main</code>. (3) Stop opening a cross-base PR: CI runs on <code>locke-&lt;target&gt;</code>, the posted review artifact is the ~700-line Locke delta, and promotion becomes a dispatched workflow that toggles protection via the API, force-updates with <code>--force-with-lease</code>, restores protection and tags.</td>
+      <td>About 1 to 1.5 agent-days across four S-sized tickets, all inside files Locke already owns. No vendor spend; slightly less CI than today.</td>
+      <td>Low. Each of the three is independently revertible and none sits on the critical path of a release build. No upstream file is touched, so the patch surface does not grow.</td>
+      <td>Nothing. It does require editing <code>WHY.md:101</code> and the README to describe what CI actually verifies, which is an honesty improvement rather than a weakening.</td>
+    </tr>
+    <tr>
+      <td>D. Merge upstream forward instead of rebasing</td>
+      <td>Kill the force-push while keeping the vendored tree: stop rebasing and <code>git merge &lt;upstream-tag&gt;</code> into <code>main</code>, so branch protection stays on and GitHub renders the PR natively.</td>
+      <td>Would have been small.</td>
+      <td>Fatal, and measured rather than assumed: merging upstream 26.7.1's base into 26.7.0-1 (a <em>patch-level</em> bump) conflicts in 190 files; merging 26.7.0's base into 26.6.4-1 conflicts in ~280, including files Locke never touched. Two structural causes: upstream's "Set version to X" commit rewrites every pom in the reactor, and release tags sit on divergent release branches, so the merge base of Locke 26.6.4-1 and upstream 26.7.0 is a commit from 2026-04-07, not the 26.6.4 tag.</td>
+      <td>Replaces a zero-conflict rebase with a 190-to-280-file manual merge on every release. Rejected on the evidence.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Recommendation</h2>
+
+<p><strong>Adopt Option C (hybrid): keep the vendored tree and the rebase, and spend about a day fixing the ritual around it.</strong></p>
+
+<p>It wins because the ticket's premise, reasonable when written, does not survive measurement. The overlay model exists to solve patch-conflict pain, and Locke does not have patch-conflict pain: the 22-file, 700-line series applied strictly clean across five of six real upstream transitions, needed zero human resolutions on the sixth, and applies strictly clean today to both Keycloak 26.7.2 and upstream <code>main</code> as of 2026-08-28. Meanwhile every pain the ticket actually names, the force-push, the branch-protection toggle, the 3,894-files-of-upstream-churn PR, and GitHub's spurious conflict flags, is a property of how the bump is <em>presented and promoted</em>, not of where the source lives. Option C removes all four for about a fifth of Option B's cost and none of its risk, and it delivers the overlay's genuine benefit (a readable, publishable statement of exactly what Locke changes) as a generated artifact.</p>
+
+<p>The precedent also points this way. The distributions Locke names as its own model in <code>README.md:85</code>, Percona Server for MySQL and Amazon Corretto, both maintain full vendored source trees. The overlay examples in the ticket are OS packagers (Debian, Fedora), where the overlay sits next to a build system that fetches upstream source as a first-class step and the packager never needs to run upstream's own test reactor, and Brave, which pays for the model with documented per-upgrade patch breakage.</p>
+
+<p><strong>On the two sub-questions the recommendation turns on.</strong> An overlay would <em>strengthen</em> the <code>WHY.md</code> claim, but only because that claim is currently overstated: <code>locke-rebase-test.yml</code> does not test, and auto-resolves everything outside the care-list. Option C strengthens it the same amount by making the daily job a real, cheap applicability check and rewording the claim to match. On sequencing versus SKYCF-391: do Option C first (it is a day, and it makes the 27.x bump itself easier to review), and do <strong>not</strong> delay 27.x for an overlay migration. The series applies clean to upstream <code>main</code> today, so the 27.x risk is semantic, not textual: new or changed SPI methods on the model interfaces, and upstream cache-architecture movement (its most recent <code>main</code> commit as of 2026-08-28 is literally "Deprecate clusterless feature"). An overlay reduces none of that. If we ever migrate, the moment to do it is <em>after</em> 27.x has landed and the patch shape is known to be stable across a major boundary.</p>
+
+<p><strong>What would change this:</strong> evidence that the patch surface is about to grow or destabilise. Concretely: if the 27.x rebase needs materially more than the current 22 upstream files (say 60+, or any patch reaching into <code>services/</code>), or if a bump requires more than a couple of hours of manual conflict resolution, then per-file patch hygiene starts to matter more than tree ergonomics and Option B becomes the better buy. The inverse also flips it: if upstream lands a genuinely pluggable cache-<em>backend</em> SPI, the patch set mostly evaporates and both options become moot. Note that discussion #48979, cited in <code>docs/adr/0004</code>, is not that: as written it lets extensions declare caches that Infinispan then manages, which would not let Locke substitute Redis for Infinispan.</p>
+
+<p><strong>Weakest assumption:</strong> that the near-zero conflict rate holds across a major version boundary. My five measured transitions are all within 26.x, and there is no 27.x tag or <code>release/27</code> branch upstream yet, so my strongest forward evidence is a single snapshot of <code>main</code> at ae1a3705. If Keycloak 27 restructures the caching layer, the patch will need rewriting rather than refreshing, and no repository model saves us from that. I am also assuming that no consumer depends on <code>git clone &amp;&amp; build</code> working offline; that is my read of the project's own tooling, not something I verified with users.</p>
+
+<h2>Sources</h2>
+
+<p><strong>External (all verified during this exploration):</strong></p>
+<ul>
+  <li>Amazon Corretto 21 repository structure, a full OpenJDK source tree on the <code>develop</code> branch that "consumes development and patches to upstream openjdk/jdk21u": <a href="https://github.com/corretto/corretto-21/blob/develop/README.md">github.com/corretto/corretto-21/blob/develop/README.md</a> and the top-level tree (<code>src/</code>, <code>make/</code>, <code>test/</code>) via <a href="https://api.github.com/repos/corretto/corretto-21/contents/?ref=develop">api.github.com/repos/corretto/corretto-21/contents/?ref=develop</a></li>
+  <li>Percona Server for MySQL development model, independent full-source branches, "instead of being a set of patches against an existing product, these branches are not related": <a href="https://docs.percona.com/percona-server/8.0/development.html">docs.percona.com/percona-server/8.0/development.html</a> and the full source tree (<code>sql/</code>, <code>storage/</code>, <code>plugin/</code>) via <a href="https://api.github.com/repos/percona/percona-server/contents/?ref=8.0">api.github.com/repos/percona/percona-server/contents/?ref=8.0</a></li>
+  <li>Brave's Chromium upgrade process: pinned Chromium tag in <code>package.json</code>, patch application on <code>pnpm run init</code>, "there could be any number of patches that can't apply anymore", manual <code>git apply --3way --ignore-space-change --ignore-whitespace</code>, then <code>pnpm run update_patches</code>: <a href="https://github.com/brave/brave-core/blob/master/docs/chromium_version_upgrade.md">github.com/brave/brave-core/blob/master/docs/chromium_version_upgrade.md</a></li>
+  <li>Debian <code>3.0 (quilt)</code> source format, <code>debian/patches/</code> plus a <code>series</code> file, applied automatically by <code>dpkg-source</code>: <a href="https://www.debian.org/doc/manuals/maint-guide/dother.en.html">debian.org/doc/manuals/maint-guide/dother.en.html</a></li>
+  <li>GitHub source-archive byte stability, held stable "for no less than a year" from 2023-02-21 with six months' notice before future format changes: <a href="https://github.blog/open-source/git/update-on-the-future-stability-of-source-code-archives-and-hashes/">github.blog/open-source/git/update-on-the-future-stability-of-source-code-archives-and-hashes/</a></li>
+  <li>Keycloak 26.7.2 release assets (no source tarball published): <a href="https://api.github.com/repos/keycloak/keycloak/releases/latest">api.github.com/repos/keycloak/keycloak/releases/latest</a></li>
+  <li>Keycloak Cache SPI discussion, scoped to extensions declaring custom caches rather than replacing the cache backend: <a href="https://github.com/keycloak/keycloak/discussions/48979">github.com/keycloak/keycloak/discussions/48979</a></li>
+  <li class="note">I could <strong>not</strong> price this in dollars. Both options are pure GitHub Actions time on an existing plan, and I have no access to the repository's Actions billing, so the CI comparison is stated in measured seconds and megabytes instead.</li>
+  <li class="note">I could <strong>not</strong> measure the current <code>locke-rebase-test.yml</code> wall-clock runtime, since I have no access to the workflow run history.</li>
+</ul>
+
+<p><strong>Repository (this clone, branch <code>agent/locke-evaluate-patch-overlay-m</code>, HEAD <code>b52113385d</code>):</strong></p>
+<ul>
+  <li><code>WHY.md:99-101</code> (the "not a hard fork" and "rebases and tests against upstream daily" claim)</li>
+  <li><code>README.md:83-85</code> (composite versioning, "the Percona Server / Amazon Corretto convention")</li>
+  <li><code>.github/workflows/locke-bump.yml:92</code>, <code>:96</code>, <code>:99</code> (force-push, branch-protection toggle, "do NOT merge via GitHub")</li>
+  <li><code>.github/workflows/locke-rebase-test.yml:12</code>, <code>:42-46</code>, <code>:46</code> (daily cron, the version-string-noise rationale, the care-list regex defining the patch surface)</li>
+  <li><code>.github/workflows/locke-pr.yml:26</code>, <code>:47-49</code> (module build, <code>-Pjpa+redis</code> conformance gate)</li>
+  <li><code>.github/workflows/locke-release.yml:42</code>, <code>:56-69</code> (dist build, container staging)</li>
+  <li><code>.github/disable-upstream-workflows.sh:5-8</code> (upstream workflow files kept byte-identical so rebases stay clean)</li>
+  <li><code>scripts/rebase-onto.sh:31-41</code>, <code>:44-50</code>, <code>:56</code>, <code>:66-69</code>, <code>:74</code>, <code>:96</code> (squash, rebase, parent-version bump, dependabot strip, compile gate, dist gate)</li>
+  <li><code>model/pom.xml:39</code>, <code>pom.xml:1048</code>, <code>quarkus/runtime/pom.xml:290</code> (Maven wiring of <code>model/redis</code>)</li>
+  <li><code>quarkus/deployment/src/main/java/org/keycloak/quarkus/deployment/KeycloakProcessor.java:824</code>, <code>:846</code>, <code>:1194</code> (conditional Jandex index, health-check suppression)</li>
+  <li><code>quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/configuration/mappers/CachingPropertyMappers.java:170-215</code> (the nine Redis property mappers)</li>
+  <li><code>quarkus/config-api/src/main/java/org/keycloak/config/CachingOptions.java:44</code>, <code>:193</code> (the <code>redis</code> mechanism enum value and the <code>cache-redis</code> option prefix)</li>
+  <li><code>model/infinispan/pom.xml:130</code> (proto-lock check skip)</li>
+  <li><code>model/infinispan/src/main/java/org/keycloak/cluster/infinispan/InfinispanClusterProviderFactory.java:157</code>, <code>.../models/cache/infinispan/CacheManager.java:219</code> (representative guards)</li>
+  <li><code>docs/adr/0004-functional-parity-under-redis.md</code> (the parity invariant, the coverage test that replaced the hand-maintained guard list, and the Cache SPI convergence plan)</li>
+  <li>Measurements were taken with <code>git diff</code>/<code>git log</code>/<code>git apply</code>/<code>patch</code> against the six release tags in this clone (<code>26.6.1-1</code>, <code>26.6.2-1</code>, <code>26.6.3-1</code>, <code>26.6.4-1</code>, <code>26.7.0-1</code>, <code>26.7.1-1</code>) and their upstream bases (<code>5bebfac09d</code>, <code>0a402f777f</code>, <code>8a67e82f8c</code>, <code>dc1bfc54bf</code>, <code>6c73e30278</code>, <code>73f08b397f</code>), plus live shallow clones of upstream <code>keycloak/keycloak</code> at tag <code>26.7.2</code> and <code>main</code> (<code>ae1a3705</code>, 2026-08-28).</li>
+</ul>
+
+<h2>Open questions</h2>
+<p>None. The two things a founder might otherwise be asked to weigh in on are settled by the evidence above: the sequencing question is answered (do the day of Option C work first, do not delay SKYCF-391), and the "adopt or not" question turns on measured conflict rate rather than on a business preference. The only judgment call left is whether to spend the day at all, and that is the accept/reject of this document.</p>
+
+<h2>Tickets to file if this recommendation is accepted</h2>
+<pre><code>[{"summary": "Publish the Locke patch series as a generated patches/ directory on every release", "type": "Task", "repo": "Locke", "why": "Gives the overlay model's real benefit, a one-directory statement of exactly what Locke changes in Keycloak, without giving up the buildable vendored tree."},
+ {"summary": "Replace the daily rebase job with a shallow-clone patch-applicability check against the latest upstream release and main", "type": "Task", "repo": "Locke", "why": "The current daily job auto-resolves everything outside its care-list and never builds; a 6-second git apply --check is cheaper, is honest, and catches 27.x-class breakage months earlier by also checking upstream main."},
+ {"summary": "Stop opening a cross-base bump PR; post the Locke-delta diff as the review artifact instead", "type": "Task", "repo": "Locke", "why": "GitHub cannot diff two different upstream bases meaningfully (3,894 of 3,930 files on the 26.7.0 bump were upstream churn), so the reviewable 700-line patch delta should be the review surface."},
+ {"summary": "Script the main-branch promotion: API-toggle branch protection, force-with-lease, restore, tag", "type": "Task", "repo": "Locke", "why": "Turns the one manual unaudited force-push of a protected public default branch into a repeatable audited workflow step."},
+ {"summary": "Correct WHY.md and README to describe what the daily upstream job actually verifies", "type": "Task", "repo": "Locke", "why": "WHY.md claims CI 'rebases and tests against upstream daily'; the job neither builds nor tests, and on a public receipts page the accurate claim is also the stronger one."}]</code></pre>
+
+</main>
+</body>
+</html>
