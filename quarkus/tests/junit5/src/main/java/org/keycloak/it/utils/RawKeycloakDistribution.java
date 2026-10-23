@@ -208,7 +208,9 @@ public final class RawKeycloakDistribution implements KeycloakDistribution {
                 destroyDescendantsOnWindows(keycloak, false);
 
                 keycloak.destroy();
-                keycloak.waitFor(DEFAULT_SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                if (!keycloak.waitFor(DEFAULT_SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                    throw new RuntimeException("Server process did not stop within " + DEFAULT_SHUTDOWN_TIMEOUT_SECONDS + " seconds");
+                }
             } catch (Exception cause) {
                 destroyDescendantsOnWindows(keycloak, true);
                 keycloak.destroyForcibly();
@@ -221,7 +223,9 @@ public final class RawKeycloakDistribution implements KeycloakDistribution {
             exitCode = keycloak.exitValue();
         }
 
-        shutdownOutputExecutor();
+        if (!shutdownOutputExecutor()) {
+            throw new AssertionError("Did not get complete output");
+        }
     }
 
     private void destroyDescendantsOnWindows(Process parent, boolean force) {
@@ -306,17 +310,18 @@ public final class RawKeycloakDistribution implements KeycloakDistribution {
         readOutput(keycloak, outputConsumer, outputExecutor);
     }
 
-    private void shutdownOutputExecutor() {
+    private boolean shutdownOutputExecutor() {
         if (outputExecutor != null) {
             outputExecutor.shutdown();
             try {
-                outputExecutor.awaitTermination(30, TimeUnit.SECONDS);
+                return outputExecutor.awaitTermination(30, TimeUnit.SECONDS);
             } catch (InterruptedException cause) {
                 throw new RuntimeException("Failed to terminate output executor", cause);
             } finally {
                 outputExecutor = null;
             }
         }
+        return true;
     }
 
     private void resetForNextRun() {
@@ -425,12 +430,12 @@ public final class RawKeycloakDistribution implements KeycloakDistribution {
     }
 
     private CompletableFuture<Void> readOutput(Process process, OutputConsumer outputConsumer, Executor ex) {
-        var inputFuture = CompletableFuture.runAsync(() -> readOutput(process, process.inputReader(StandardCharsets.UTF_8), outputConsumer::onStdOut), ex);
-        var errorFuture = CompletableFuture.runAsync(() -> readOutput(process, process.errorReader(StandardCharsets.UTF_8), outputConsumer::onErrOut), ex);
+        var inputFuture = CompletableFuture.runAsync(() -> readOutput(process.inputReader(StandardCharsets.UTF_8), outputConsumer::onStdOut), ex);
+        var errorFuture = CompletableFuture.runAsync(() -> readOutput(process.errorReader(StandardCharsets.UTF_8), outputConsumer::onErrOut), ex);
         return CompletableFuture.allOf(inputFuture, errorFuture);
     }
 
-    private void readOutput(Process process, BufferedReader reader, Consumer<String> outputConsumer) {
+    private void readOutput(BufferedReader reader, Consumer<String> outputConsumer) {
         try (reader) {
             String line;
 

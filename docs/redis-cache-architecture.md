@@ -180,7 +180,7 @@ When `cache=redis`:
 | `userCache` | `RedisUserCacheProviderFactory` (id=`redis`) | `InfinispanUserCacheProviderFactory` (id=`default`) |
 | `cachedStore` (authZ) | `RedisCacheStoreFactoryProviderFactory` (id=`redis`) | `InfinispanCacheStoreFactoryProviderFactory` (id=`default`) |
 | `authenticationSessions` | `RedisAuthenticationSessionProviderFactory` (id=`redis`) | `InfinispanAuthenticationSessionProviderFactory` (id=`infinispan`) |
-| `loginFailures` | `RedisUserLoginFailureProviderFactory` (id=`redis`) | `InfinispanUserLoginFailureProviderFactory` |
+| `loginFailures` | `RedisUserLoginFailureProviderFactory` (id=`redis`), only with the `login-failures:v1` feature; the default `v2` uses upstream's `JpaUserLoginFailureProviderFactory` in every cache mode | `InfinispanUserLoginFailureProviderFactory` (also `v1` only) |
 | `singleUseObject` | `RedisSingleUseObjectProviderFactory` (id=`redis`) | `InfinispanSingleUseObjectProviderFactory` |
 | `userSessions` | `RedisUserSessionProviderFactory` (id=`redis`, delegates to JPA) | `InfinispanUserSessionProviderFactory` |
 | `stickySessionEncoder` | `RedisStickySessionEncoderProviderFactory` (id=`redis`) | `InfinispanStickySessionEncoderProviderFactory` |

@@ -21,7 +21,7 @@
     <parent>
         <artifactId>keycloak-test-framework-parent</artifactId>
         <groupId>org.keycloak.testframework</groupId>
-        <version>26.7.1</version>
+        <version>26.8.1</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
@@ -138,6 +138,12 @@
             <dependency>
                 <groupId>org.keycloak.testframework</groupId>
                 <artifactId>keycloak-test-framework-clustering</artifactId>
+                <version>${project.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.keycloak.testframework</groupId>
+                <artifactId>keycloak-test-framework-conformance-runner</artifactId>
                 <version>${project.version}</version>
                 <scope>test</scope>
             </dependency>

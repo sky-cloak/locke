@@ -26,6 +26,8 @@ import org.keycloak.models.session.PersistentUserSessionAdapter;
 import org.keycloak.models.session.UserSessionPersisterProvider;
 import org.keycloak.models.utils.KeycloakModelUtils;
 
+import static org.keycloak.utils.StreamsUtil.paginatedStream;
+
 /**
  * Redis user session provider that delegates to JPA persistent sessions.
  *
@@ -404,14 +406,20 @@ public class RedisUserSessionProvider implements UserSessionProvider {
 
     @Override
     public Stream<UserSessionModel> readOnlyStreamUserSessions(RealmModel realm, ClientModel client, int skip, int maxResults) {
-        return persister().readOnlyUserSessionStream(realm, client, false, skip, maxResults)
-                .filter(s -> !RedisUserSessionAdapter.isUserSessionExpired(realm, s, false));
+        // Paginate after the expiration filter, as upstream does, so expired rows do not
+        // shrink a page.
+        return paginatedStream(persister().readOnlyUserSessionStream(realm, client, false, -1, -1)
+                        .filter(s -> !RedisUserSessionAdapter.isUserSessionExpired(realm, s, false)),
+                skip, maxResults);
     }
 
     @Override
     public Stream<UserSessionModel> readOnlyStreamOfflineUserSessions(RealmModel realm, ClientModel client, int skip, int maxResults) {
-        return persister().readOnlyUserSessionStream(realm, client, true, skip, maxResults)
-                .filter(s -> !RedisUserSessionAdapter.isUserSessionExpired(realm, s, true));
+        // Paginate after the expiration filter, as upstream does, so expired rows do not
+        // shrink a page.
+        return paginatedStream(persister().readOnlyUserSessionStream(realm, client, true, -1, -1)
+                        .filter(s -> !RedisUserSessionAdapter.isUserSessionExpired(realm, s, true)),
+                skip, maxResults);
     }
 
     @Override

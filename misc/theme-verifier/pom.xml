@@ -23,7 +23,7 @@
     <parent>
         <groupId>org.keycloak</groupId>
         <artifactId>keycloak-parent</artifactId>
-        <version>26.7.1</version>
+        <version>26.8.1</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
@@ -78,7 +78,6 @@
         <dependency>
             <groupId>com.googlecode.owasp-java-html-sanitizer</groupId>
             <artifactId>owasp-java-html-sanitizer</artifactId>
-            <version>20260101.1</version>
         </dependency>
         <dependency>
             <groupId>org.apache.commons</groupId>

@@ -7,6 +7,7 @@ import java.io.ObjectOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 
 import org.jboss.logging.Logger;
 import org.keycloak.cache.redis.HashCacheAdapter;
@@ -16,6 +17,7 @@ import org.keycloak.connections.redis.RedisConnectionProvider;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
+import org.keycloak.models.UserModel;
 import org.keycloak.models.sessions.redis.entities.RedisAuthenticationSessionEntity;
 import org.keycloak.models.sessions.redis.entities.RedisRootAuthenticationSessionEntity;
 import org.keycloak.models.utils.SessionExpiration;
@@ -55,6 +57,7 @@ public class RedisAuthenticationSessionProvider implements AuthenticationSession
     private static final String F_REALM_ID = "realmId";
     private static final String F_TIMESTAMP = "timestamp";
     private static final String TAB_FIELD_PREFIX = "tab:";
+    private static final String USER_INDEX_PREFIX = "authUser:";
 
     private final KeycloakSession session;
     private final HashCacheAdapter<String> hash;
@@ -113,6 +116,41 @@ public class RedisAuthenticationSessionProvider implements AuthenticationSession
     @Override
     public void removeRootAuthenticationSession(RealmModel realm, RootAuthenticationSessionModel authenticationSession) {
         hash.remove(cacheKey(authenticationSession.getId()));
+    }
+
+    /**
+     * Upstream scans its whole auth-session cache for roots holding a tab authenticated as
+     * the user. A Redis keyspace scan is not an option on the login path, so the roots are
+     * found through a per-user index set written when a tab authenticates a user (see
+     * {@link #indexAuthenticatedUser}). The index is only a hint: every root is reloaded and
+     * checked against the realm and its tabs before it is removed, and ids of roots that
+     * are gone or no longer match are dropped from the set.
+     */
+    @Override
+    public void removeRootAuthenticationSessionsByAuthenticatedUser(RealmModel realm, UserModel user, String rootAuthenticationSessionIdToKeep) {
+        String index = userIndexName(realm.getId(), user.getId());
+        for (String rootId : hash.indexMembers(index)) {
+            if (Objects.equals(rootId, rootAuthenticationSessionIdToKeep)) {
+                continue;
+            }
+            Map<String, byte[]> fields = hash.getAll(cacheKey(rootId));
+            RedisRootAuthenticationSessionEntity entity = fields == null || fields.isEmpty() ? null : reconstruct(fields);
+            if (entity != null && realm.getId().equals(entity.getRealmId())
+                    && entity.getAuthenticationSessions().values().stream()
+                            .anyMatch(tab -> Objects.equals(tab.getAuthUserId(), user.getId()))) {
+                hash.remove(cacheKey(rootId));
+            }
+            hash.removeFromIndex(index, rootId);
+        }
+    }
+
+    /** Records that the root holds a tab authenticated as the user; lives as long as an auth session. */
+    void indexAuthenticatedUser(RealmModel realm, String rootId, String userId) {
+        hash.addToIndex(userIndexName(realm.getId(), userId), rootId, getAuthSessionLifespan(realm));
+    }
+
+    private static String userIndexName(String realmId, String userId) {
+        return USER_INDEX_PREFIX + realmId + ":" + userId;
     }
 
     @Override

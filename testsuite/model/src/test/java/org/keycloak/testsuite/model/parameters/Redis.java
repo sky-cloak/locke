@@ -19,6 +19,8 @@ package org.keycloak.testsuite.model.parameters;
 import java.util.Set;
 
 import org.keycloak.cluster.redis.RedisClusterProviderFactory;
+import org.keycloak.common.Profile;
+import org.keycloak.common.profile.PropertiesProfileConfigResolver;
 import org.keycloak.connections.redis.DefaultRedisConnectionProviderFactory;
 import org.keycloak.connections.redis.RedisConnectionSpi;
 import org.keycloak.crl.CrlStorageSpi;
@@ -101,6 +103,9 @@ public class Redis extends KeycloakModelParameters {
 
     public Redis() {
         super(ALLOWED_SPIS, ALLOWED_FACTORIES);
+        // The Redis login-failure provider serves login-failures:v1, like upstream's Infinispan one;
+        // enable it so the suite runs against Redis rather than the default JPA provider.
+        System.getProperties().put(PropertiesProfileConfigResolver.getPropertyKey(Profile.Feature.LOGIN_FAILURES_V1), "enabled");
     }
 
     @Override

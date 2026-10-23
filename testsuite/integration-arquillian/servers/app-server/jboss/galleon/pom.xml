@@ -5,7 +5,7 @@
     <parent>
         <groupId>org.keycloak.testsuite</groupId>
         <artifactId>integration-arquillian-servers-app-server-jboss</artifactId>
-        <version>26.7.1</version>
+        <version>26.8.1</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 

@@ -129,7 +129,7 @@ public class InfinispanUserLoginFailureProviderFactory implements UserLoginFailu
 
     @Override
     public boolean isSupported(Config.Scope config) {
-        return !Profile.isFeatureEnabled(Profile.Feature.STATELESS) && InfinispanUtils.isEmbeddedInfinispan() && !"redis".equals(config.root().get("cache"));
+        return Profile.isFeatureEnabled(Profile.Feature.LOGIN_FAILURES_V1) && InfinispanUtils.isEmbeddedInfinispan() && !"redis".equals(config.root().get("cache"));
     }
 
     @Override

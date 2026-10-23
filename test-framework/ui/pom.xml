@@ -21,7 +21,7 @@
     <parent>
         <artifactId>keycloak-test-framework-parent</artifactId>
         <groupId>org.keycloak.testframework</groupId>
-        <version>26.7.1</version>
+        <version>26.8.1</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
@@ -32,8 +32,8 @@
     <description>UI extension for Keycloak Test Framework</description>
 
     <properties>
-        <selenium.version>4.39.0</selenium.version>
-        <selenium.html.unit.version>4.39.0</selenium.html.unit.version>
+        <selenium.version>4.46.0</selenium.version>
+        <selenium.html.unit.version>4.46.0</selenium.html.unit.version>
     </properties>
 
     <dependencies>

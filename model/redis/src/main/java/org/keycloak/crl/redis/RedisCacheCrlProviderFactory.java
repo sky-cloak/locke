@@ -17,7 +17,6 @@
 package org.keycloak.crl.redis;
 
 import org.keycloak.Config;
-import org.keycloak.cluster.ClusterProvider;
 import org.keycloak.crl.CrlStorageProvider;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
@@ -36,12 +35,9 @@ public class RedisCacheCrlProviderFactory implements CacheCrlProviderFactory, En
 
     public static final String PROVIDER_ID = "redis";
 
-    private volatile boolean listenerRegistered;
-
     @Override
     public CacheCrlProvider create(KeycloakSession session) {
         RedisCrlStorageProviderFactory storage = storageFactory(session);
-        registerClearListener(session, storage);
         return new RedisCacheCrlProvider(session, storage);
     }
 
@@ -53,22 +49,6 @@ public class RedisCacheCrlProviderFactory implements CacheCrlProviderFactory, En
                     + (factory == null ? "none" : factory.getClass().getName()));
         }
         return redisFactory;
-    }
-
-    /** Applies a clear that another node initiated. */
-    private void registerClearListener(KeycloakSession session, RedisCrlStorageProviderFactory storage) {
-        if (listenerRegistered) {
-            return;
-        }
-        synchronized (this) {
-            if (listenerRegistered) {
-                return;
-            }
-            session.getProvider(ClusterProvider.class).registerListener(
-                    RedisCrlStorageProviderFactory.CRL_CLEAR_CACHE_EVENTS,
-                    event -> storage.clearCache());
-            listenerRegistered = true;
-        }
     }
 
     @Override

@@ -124,6 +124,25 @@
           "optional" : true
         } ]
       }, {
+        "name" : "AuthenticatedUserAuthSessionPredicate",
+        "type_id" : 65623,
+        "fields" : [ {
+          "id" : 1,
+          "name" : "realmId",
+          "type" : "string",
+          "optional" : true
+        }, {
+          "id" : 2,
+          "name" : "userId",
+          "type" : "string",
+          "optional" : true
+        }, {
+          "id" : 3,
+          "name" : "rootAuthenticationSessionIdToKeep",
+          "type" : "string",
+          "optional" : true
+        } ]
+      }, {
         "name" : "UserFederationLinkRemovedEvent",
         "type_id" : 65591,
         "fields" : [ {

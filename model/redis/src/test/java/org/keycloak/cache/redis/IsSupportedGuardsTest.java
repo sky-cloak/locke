@@ -7,6 +7,8 @@ package org.keycloak.cache.redis;
 
 import org.junit.Test;
 import org.keycloak.Config;
+import org.keycloak.common.Profile;
+import org.keycloak.common.profile.CommaSeparatedListProfileConfigResolver;
 import org.keycloak.models.cache.redis.RedisCacheRealmProviderFactory;
 import org.keycloak.models.cache.redis.RedisUserCacheProviderFactory;
 import org.keycloak.models.cache.redis.authorization.RedisCacheStoreFactoryProviderFactory;
@@ -86,10 +88,19 @@ public class IsSupportedGuardsTest {
     }
 
     @Test
-    public void redisUserLoginFailureProvider_supportedOnlyWhenCacheRedis() {
+    public void redisUserLoginFailureProvider_supportedOnlyWhenCacheRedisAndLoginFailuresV1() {
         EnvironmentDependentProviderFactory f = new RedisUserLoginFailureProviderFactory();
-        assertThat(f.isSupported(scopeWithCache("redis")), equalTo(true));
-        assertThat(f.isSupported(scopeWithCache("ispn")), equalTo(false));
+        try {
+            // Default login-failures:v2 keeps login failures in the database (JPA provider).
+            Profile.defaults();
+            assertThat(f.isSupported(scopeWithCache("redis")), equalTo(false));
+
+            Profile.configure(new CommaSeparatedListProfileConfigResolver("login-failures:v1", ""));
+            assertThat(f.isSupported(scopeWithCache("redis")), equalTo(true));
+            assertThat(f.isSupported(scopeWithCache("ispn")), equalTo(false));
+        } finally {
+            Profile.reset();
+        }
     }
 
     @Test

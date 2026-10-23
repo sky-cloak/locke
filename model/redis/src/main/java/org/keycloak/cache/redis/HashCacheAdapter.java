@@ -219,6 +219,18 @@ public final class HashCacheAdapter<K> {
         withConnection(cmd -> cmd.srem(indexKey(indexName), serializeKey(memberKey)));
     }
 
+    /** Members of the index set named {@code indexName} ({@code SMEMBERS}). Empty if the set is absent. */
+    public java.util.Set<String> indexMembers(String indexName) {
+        return withConnection(cmd -> {
+            java.util.Set<byte[]> raw = cmd.smembers(indexKey(indexName));
+            java.util.Set<String> out = new java.util.HashSet<>(raw.size());
+            for (byte[] b : raw) {
+                out.add(new String(b, StandardCharsets.UTF_8));
+            }
+            return out;
+        });
+    }
+
     /** Count members in an index set. */
     public long indexSize(String indexName) {
         return withConnection(cmd -> cmd.scard(indexKey(indexName)));

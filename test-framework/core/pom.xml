@@ -21,7 +21,7 @@
     <parent>
         <artifactId>keycloak-test-framework-parent</artifactId>
         <groupId>org.keycloak.testframework</groupId>
-        <version>26.7.1</version>
+        <version>26.8.1</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
@@ -34,7 +34,7 @@
     <dependencies>
         <dependency>
             <groupId>org.keycloak</groupId>
-            <artifactId>keycloak-admin-client-tests</artifactId>
+            <artifactId>keycloak-admin-client-internal</artifactId>
         </dependency>
         <dependency>
             <groupId>org.keycloak.testframework</groupId>

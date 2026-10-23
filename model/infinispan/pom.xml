@@ -21,7 +21,7 @@
     <parent>
         <artifactId>keycloak-model-pom</artifactId>
         <groupId>org.keycloak</groupId>
-        <version>26.7.1</version>
+        <version>26.8.1</version>
     </parent>
 
     <modelVersion>4.0.0</modelVersion>
@@ -95,6 +95,11 @@
             <artifactId>junit</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
+            <scope>test</scope>
+        </dependency>
 
         <!-- Needed for infinispan statistics -->
         <dependency>
@@ -128,7 +133,7 @@
                          build. Locke builds from pre-validated upstream tags and never changes
                          the Infinispan protos, so skipping it here is safe. -->
                     <skip>true</skip>
-                    <remoteLockFiles>https://raw.githubusercontent.com/keycloak/keycloak/refs/heads/archive/release/26.0/model/infinispan/proto.lock,https://raw.githubusercontent.com/keycloak/keycloak/refs/heads/archive/release/26.1/model/infinispan/proto.lock,https://raw.githubusercontent.com/keycloak/keycloak/refs/heads/archive/release/26.2/model/infinispan/proto.lock,https://raw.githubusercontent.com/keycloak/keycloak/refs/heads/archive/release/26.3/model/infinispan/proto.lock,https://raw.githubusercontent.com/keycloak/keycloak/refs/heads/release/26.4/model/infinispan/proto.lock</remoteLockFiles>
+                    <remoteLockFiles>https://raw.githubusercontent.com/keycloak/keycloak/refs/heads/archive/release/26.0/model/infinispan/proto.lock,https://raw.githubusercontent.com/keycloak/keycloak/refs/heads/archive/release/26.1/model/infinispan/proto.lock,https://raw.githubusercontent.com/keycloak/keycloak/refs/heads/archive/release/26.2/model/infinispan/proto.lock,https://raw.githubusercontent.com/keycloak/keycloak/refs/heads/archive/release/26.3/model/infinispan/proto.lock,https://raw.githubusercontent.com/keycloak/keycloak/refs/heads/release/26.4/model/infinispan/proto.lock,https://raw.githubusercontent.com/keycloak/keycloak/refs/heads/archive/release/26.5/model/infinispan/proto.lock,https://raw.githubusercontent.com/keycloak/keycloak/refs/heads/release/26.6/model/infinispan/proto.lock,https://raw.githubusercontent.com/keycloak/keycloak/refs/heads/archive/release/26.7/model/infinispan/proto.lock,https://raw.githubusercontent.com/keycloak/keycloak/refs/heads/release/26.8/model/infinispan/proto.lock</remoteLockFiles>
                 </configuration>
             </plugin>
             <plugin>

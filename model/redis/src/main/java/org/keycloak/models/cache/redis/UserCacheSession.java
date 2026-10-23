@@ -52,6 +52,7 @@ import org.keycloak.models.cache.redis.entities.CachedFederatedIdentityLinks;
 import org.keycloak.models.cache.redis.entities.CachedUser;
 import org.keycloak.models.cache.redis.entities.CachedUserConsent;
 import org.keycloak.models.cache.redis.entities.CachedUserConsents;
+import org.keycloak.models.cache.redis.entities.FederatedIdentityUserListQuery;
 import org.keycloak.models.cache.redis.entities.UserListQuery;
 import org.keycloak.models.cache.redis.events.UserCacheRealmInvalidationEvent;
 import org.keycloak.models.cache.redis.events.UserConsentsUpdatedEvent;
@@ -91,6 +92,12 @@ import java.util.stream.Stream;
  * @version $Revision: 1 $
  */
 public class UserCacheSession implements UserCache, OnCreateComponent, OnUpdateComponent, UserProfileDecorator {
+
+    // tracks the realm a managed user was resolved for, since the user itself may be a raw delegate or a wrapper
+    // that doesn't expose it
+    private record ManagedUser(UserModel user, String realmId) {
+    }
+
     protected static final Logger logger = Logger.getLogger(UserCacheSession.class);
     protected UserCacheManager cache;
     protected KeycloakSession session;
@@ -103,7 +110,7 @@ public class UserCacheSession implements UserCache, OnCreateComponent, OnUpdateC
     protected Set<String> invalidations = new HashSet<>();
     protected Set<String> realmInvalidations = new HashSet<>();
     protected Set<InvalidationEvent> invalidationEvents = new HashSet<>(); // Events to be sent across cluster
-    protected Map<String, UserModel> managedUsers = new HashMap<>();
+    protected Map<String, ManagedUser> managedUsers = new HashMap<>();
     private StoreManagers datastoreProvider;
 
     public UserCacheSession(UserCacheManager cache, KeycloakSession session) {
@@ -210,9 +217,9 @@ public class UserCacheSession implements UserCache, OnCreateComponent, OnUpdateC
             logger.trace("registered for invalidation return delegate");
             return getDelegate().getUserById(realm, id);
         }
-        if (managedUsers.containsKey(id)) {
-            logger.trace("return managedusers");
-            return managedUsers.get(id);
+        ManagedUser managedUser = managedUsers.get(id);
+        if (managedUser != null && realm.getId().equals(managedUser.realmId())) {
+            return managedUser.user();
         }
 
         CachedUser cached = cache.get(id, CachedUser.class);
@@ -234,7 +241,7 @@ public class UserCacheSession implements UserCache, OnCreateComponent, OnUpdateC
         } else {
             adapter = validateCache(realm, cached, () -> getDelegate().getUserById(realm, id));
         }
-        addManagedUser(id, adapter);
+        addManagedUser(realm, id, adapter);
         return adapter;
     }
 
@@ -288,7 +295,7 @@ public class UserCacheSession implements UserCache, OnCreateComponent, OnUpdateC
             if (invalidations.contains(userId)) return model;
             if (managedUsers.containsKey(userId)) {
                 logger.tracev("return managed user");
-                return managedUsers.get(userId);
+                return managedUsers.get(userId).user();
             }
 
             UserModel adapter = getUserAdapter(realm, userId, loaded, model);
@@ -296,7 +303,7 @@ public class UserCacheSession implements UserCache, OnCreateComponent, OnUpdateC
                 query = new UserListQuery(loaded, cacheKey, realm, model.getId());
                 cache.addRevisioned(query, startupRevision, getLifespan(realm, adapter));
             }
-            addManagedUser(userId, adapter);
+            addManagedUser(realm, userId, adapter);
             return adapter;
         }
 
@@ -442,14 +449,14 @@ public class UserCacheSession implements UserCache, OnCreateComponent, OnUpdateC
             if (model == null) return null;
             String userId = model.getId();
             if (invalidations.contains(userId)) return model;
-            if (managedUsers.containsKey(userId)) return managedUsers.get(userId);
+            if (managedUsers.containsKey(userId)) return managedUsers.get(userId).user();
 
             UserModel adapter = getUserAdapter(realm, userId, loaded, model);
             if (adapter instanceof UserAdapter) {
                 query = new UserListQuery(loaded, cacheKey, realm, model.getId());
                 cache.addRevisioned(query, startupRevision, getLifespan(realm, adapter));
             }
-            addManagedUser(userId, adapter);
+            addManagedUser(realm, userId, adapter);
             return adapter;
         }
 
@@ -495,15 +502,15 @@ public class UserCacheSession implements UserCache, OnCreateComponent, OnUpdateC
             if (model == null) return null;
             userId = model.getId();
             if (invalidations.contains(userId)) return model;
-            if (managedUsers.containsKey(userId)) return managedUsers.get(userId);
+            if (managedUsers.containsKey(userId)) return managedUsers.get(userId).user();
 
             UserModel adapter = getUserAdapter(realm, userId, loaded, model);
             if (adapter instanceof UserAdapter) {
-                query = new UserListQuery(loaded, cacheKey, realm, model.getId());
+                query = new FederatedIdentityUserListQuery(loaded, cacheKey, realm, model.getId(), socialLink.getIdentityProvider());
                 cache.addRevisioned(query, startupRevision, getLifespan(realm, adapter));
             }
 
-            addManagedUser(userId, adapter);
+            addManagedUser(realm, userId, adapter);
             return adapter;
         } else {
             userId = query.getUsers().iterator().next();
@@ -581,7 +588,7 @@ public class UserCacheSession implements UserCache, OnCreateComponent, OnUpdateC
             if (invalidations.contains(userId)) return model;
             if (managedUsers.containsKey(userId)) {
                 logger.tracev("return managed user");
-                return managedUsers.get(userId);
+                return managedUsers.get(userId).user();
             }
 
             UserModel adapter = getUserAdapter(realm, userId, loaded, model);
@@ -589,7 +596,7 @@ public class UserCacheSession implements UserCache, OnCreateComponent, OnUpdateC
                 query = new UserListQuery(loaded, cacheKey, realm, model.getId());
                 cache.addRevisioned(query, startupRevision, getLifespan(realm, adapter));
             }
-            addManagedUser(userId, adapter);
+            addManagedUser(realm, userId, adapter);
             return adapter;
         } else {
             userId = query.getUsers().iterator().next();
@@ -644,7 +651,7 @@ public class UserCacheSession implements UserCache, OnCreateComponent, OnUpdateC
         }
 
         if (managedUsers.containsKey(delegate.getId())) {
-            return managedUsers.get(delegate.getId());
+            return managedUsers.get(delegate.getId()).user();
         }
 
         CachedUser cached = cache.get(delegate.getId(), CachedUser.class);
@@ -890,6 +897,11 @@ public class UserCacheSession implements UserCache, OnCreateComponent, OnUpdateC
     }
 
     @Override
+    public boolean removeIssuedVerifiableCredential(String userId, String credentialId) {
+        return getDelegate().removeIssuedVerifiableCredential(userId, credentialId);
+    }
+
+    @Override
     public void removeExpiredIssuedVerifiableCredentials() {
         getDelegate().removeExpiredIssuedVerifiableCredentials();
     }
@@ -926,15 +938,15 @@ public class UserCacheSession implements UserCache, OnCreateComponent, OnUpdateC
         UserModel user = getDelegate().addUser(realm, id, username, addDefaultRoles, addDefaultRequiredActions);
         // just in case the transaction is rolled back you need to invalidate the user and all cache queries for that user
         fullyInvalidateUser(realm, user);
-        addManagedUser(user.getId(), user);
+        addManagedUser(realm, user.getId(), user);
         return user;
     }
 
-    private void addManagedUser(String id, UserModel user) {
+    private void addManagedUser(RealmModel realm, String id, UserModel user) {
         if (EntityManagers.isBatchMode()) {
             return;
         }
-        managedUsers.put(id, user);
+        managedUsers.put(id, new ManagedUser(user, realm.getId()));
     }
 
     @Override
@@ -942,7 +954,7 @@ public class UserCacheSession implements UserCache, OnCreateComponent, OnUpdateC
         UserModel user = getDelegate().addUser(realm, username);
         // just in case the transaction is rolled back you need to invalidate the user and all cache queries for that user
         fullyInvalidateUser(realm, user);
-        addManagedUser(user.getId(), user);
+        addManagedUser(realm, user.getId(), user);
         return user;
     }
 

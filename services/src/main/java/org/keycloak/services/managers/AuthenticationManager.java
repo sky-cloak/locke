@@ -103,6 +103,8 @@ import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.TokenManager;
 import org.keycloak.protocol.oidc.encode.AccessTokenContext;
 import org.keycloak.protocol.oidc.encode.TokenContextEncoderProvider;
+import org.keycloak.protocol.oidc.verifier.TokenVerifierProvider;
+import org.keycloak.protocol.oidc.verifier.TokenVerifierProviderManager;
 import org.keycloak.rar.AuthorizationDetails;
 import org.keycloak.representations.AccessToken;
 import org.keycloak.representations.AuthorizationDetailsJSONRepresentation;
@@ -142,7 +144,8 @@ public class AuthenticationManager {
     public static final String SET_REDIRECT_URI_AFTER_REQUIRED_ACTIONS= "SET_REDIRECT_URI_AFTER_REQUIRED_ACTIONS";
     public static final String END_AFTER_REQUIRED_ACTIONS = "END_AFTER_REQUIRED_ACTIONS";
     public static final String INVALIDATE_ACTION_TOKEN = "INVALIDATE_ACTION_TOKEN";
-    private final static long CLOCK_SKEW_SECONDS = 60;
+    /** Extra retention for action-token revocations to account for clock differences between nodes. */
+    public static final long CLOCK_SKEW_SECONDS = 60;
 
     /**
      * Auth session note, which indicates if user session will be persistent (Saved to real persistent store) or
@@ -733,10 +736,18 @@ public class AuthenticationManager {
         String brokerId = userSession.getNote(Details.IDENTITY_PROVIDER);
         String initiatingIdp = logoutAuthSession.getAuthNote(AuthenticationManager.LOGOUT_INITIATING_IDP);
         if (brokerId != null && !brokerId.equals(initiatingIdp)) {
-            UserAuthenticationIdentityProvider<?> identityProvider = IdentityBrokerService.getIdentityProvider(session, brokerId);
-            Response response = identityProvider.keycloakInitiatedBrowserLogout(session, userSession, uriInfo, realm);
-            if (response != null) {
-                return response;
+            UserAuthenticationIdentityProvider<?> identityProvider = null;
+            try {
+                identityProvider = IdentityBrokerService.getIdentityProvider(session, brokerId);
+            } catch (IdentityBrokerException e) {
+                logger.warnf("Identity provider [%s] is no longer available, skipping Keycloak-initiated broker logout for user session [%s]", brokerId, userSession.getId());
+            }
+
+            if (identityProvider != null) {
+                Response response = identityProvider.keycloakInitiatedBrowserLogout(session, userSession, uriInfo, realm);
+                if (response != null) {
+                    return response;
+                }
             }
         }
 
@@ -1015,7 +1026,7 @@ public class AuthenticationManager {
         String[] split = cookie.split("/");
         if (split.length >= 3) {
             String oldSessionId = split[2];
-            return !sessionId.equals(oldSessionId);
+            return sessionId.equals(oldSessionId);
         }
         return false;
     }
@@ -1288,7 +1299,7 @@ public class AuthenticationManager {
         //if Parameterized Scopes are enabled, get the scopes from the AuthorizationRequestContext, passing the session and scopes as parameters
         // then concat a Stream with the ClientModel, as it's discarded in the getAuthorizationRequestContext method
         if (Profile.isFeatureEnabled(Profile.Feature.PARAMETERIZED_SCOPES)) {
-            return AuthorizationContextUtil.getAuthorizationRequestsStreamFromScopesWithClient(session, client, authSession.getClientNote(OAuth2Constants.SCOPE));
+            return AuthorizationContextUtil.getAuthorizationRequestsStreamFromScopesWithClient(session, client, authSession.getAuthenticatedUser(), authSession.getClientNote(OAuth2Constants.SCOPE));
         }
         // if parameterized scopes are not enabled, we retain the old behaviour, but the ClientScopes will be wrapped in
         // AuthorizationRequest objects to standardize the code handling these.
@@ -1556,9 +1567,12 @@ public class AuthenticationManager {
                 verifier.audience(checkAudience);
             }
 
-            // Check token revocation in case of access token
+            // Check token revocation and additional verifiers in case of access token
             if (checkTokenType) {
                 verifier.withChecks(new TokenManager.TokenRevocationCheck(session));
+
+                TokenVerifierProvider.TokenVerifierProviderContext ctx = new TokenVerifierProvider.TokenVerifierProviderContext(verifier, session, realm, uriInfo);
+                new TokenVerifierProviderManager().additionalAccessTokenVerifications(ctx);
             }
 
             String kid = verifier.getHeader().getKeyId();

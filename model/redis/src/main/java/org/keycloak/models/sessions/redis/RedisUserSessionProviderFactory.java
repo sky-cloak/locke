@@ -3,6 +3,7 @@ package org.keycloak.models.sessions.redis;
 import java.util.UUID;
 
 import org.keycloak.Config;
+import org.keycloak.common.util.Environment;
 import org.keycloak.connections.redis.RedisConnectionProvider;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
@@ -50,8 +51,12 @@ public class RedisUserSessionProviderFactory implements UserSessionProviderFacto
             }
         });
 
-        // Periodic purge of expired sessions from the database — same duty as upstream's
-        // expiration task, distributed across nodes via a per-realm Redis lease.
+        // Periodic purge of expired sessions from the database: same duty as upstream's
+        // expiration task, distributed across nodes via a per-realm Redis lease. Skipped for
+        // one-time commands (export, import), as upstream does.
+        if (Environment.isNonServerMode()) {
+            return;
+        }
         try (KeycloakSession session = factory.create()) {
             RedisConnectionProvider redis = session.getProvider(RedisConnectionProvider.class);
             expirationTask = new RedisExpirationTask(factory, expirationPeriodSeconds,

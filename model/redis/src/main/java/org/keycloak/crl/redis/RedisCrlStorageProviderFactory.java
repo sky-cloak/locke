@@ -25,6 +25,7 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 
 import org.keycloak.Config;
+import org.keycloak.cluster.ClusterProvider;
 import org.keycloak.crl.CrlStorageProvider;
 import org.keycloak.crl.CrlStorageProviderFactory;
 import org.keycloak.models.KeycloakSession;
@@ -49,6 +50,7 @@ public class RedisCrlStorageProviderFactory implements CrlStorageProviderFactory
     public static final String CRL_CLEAR_CACHE_EVENTS = "CRL_CLEAR_CACHE_EVENTS";
 
     private volatile Cache<String, CrlEntry> crlCache;
+    private volatile boolean listenerRegistered;
     private final Map<String, FutureTask<X509CRL>> tasksInProgress = new ConcurrentHashMap<>();
     private volatile long cacheTime;
     private volatile long minTimeBetweenRequests;
@@ -56,6 +58,7 @@ public class RedisCrlStorageProviderFactory implements CrlStorageProviderFactory
     @Override
     public CrlStorageProvider create(KeycloakSession session) {
         lazyInit();
+        registerClearListener(session);
         return new RedisCrlStorageProvider(crlCache, tasksInProgress, cacheTime, minTimeBetweenRequests);
     }
 
@@ -102,6 +105,29 @@ public class RedisCrlStorageProviderFactory implements CrlStorageProviderFactory
     @Override
     public void postInit(KeycloakSessionFactory factory) {
         // no-op
+    }
+
+    /**
+     * Applies a clear that another node initiated. Registered by the storage factory, which
+     * every node with something cached has created, rather than by the cache provider, which
+     * only a node that served an admin clear itself has: upstream moved its listeners the same
+     * way, so a clear reaches every node.
+     */
+    private void registerClearListener(KeycloakSession session) {
+        if (listenerRegistered) {
+            return;
+        }
+        synchronized (this) {
+            if (listenerRegistered) {
+                return;
+            }
+            ClusterProvider cluster = session.getProvider(ClusterProvider.class);
+            if (cluster == null) {
+                return;
+            }
+            cluster.registerListener(CRL_CLEAR_CACHE_EVENTS, event -> clearCache());
+            listenerRegistered = true;
+        }
     }
 
     /** Drops this node's cached CRLs. Fanning the clear out to the other nodes is the

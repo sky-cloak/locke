@@ -143,6 +143,7 @@ public class InviteOrgActionTokenHandler extends AbstractActionTokenHandler<Invi
         }
 
         if (organization.isMember(user)) {
+            session.getContext().setOrganization(organization);
             return alreadyMemberResponse(organization, user, tokenContext, token);
         }
 
@@ -153,11 +154,17 @@ public class InviteOrgActionTokenHandler extends AbstractActionTokenHandler<Invi
             return invalidTokenResponse(tokenContext, token);
         }
 
+        session.getContext().setOrganization(organization);
+
         UriInfo uriInfo = tokenContext.getUriInfo();
         RealmModel realm = tokenContext.getRealm();
 
         if (tokenContext.isAuthenticationSessionFresh()) {
             return confirmMembershipResponse(organization, user, tokenContext, token);
+        }
+
+        if (!Organizations.useInvitationToken(session, token)) {
+            return invalidTokenResponse(tokenContext, token);
         }
 
         // if we made it this far then go ahead and add the user to the organization
@@ -191,6 +198,11 @@ public class InviteOrgActionTokenHandler extends AbstractActionTokenHandler<Invi
         }
 
         return AuthenticationManager.redirectToRequiredActions(session, realm, authSession, uriInfo, nextAction);
+    }
+
+    @Override
+    public boolean canUseTokenRepeatedly(InviteOrgActionToken token, ActionTokenContext<InviteOrgActionToken> tokenContext) {
+        return false;
     }
 
     private Response invalidTokenResponse(ActionTokenContext<InviteOrgActionToken> tokenContext, InviteOrgActionToken token) {

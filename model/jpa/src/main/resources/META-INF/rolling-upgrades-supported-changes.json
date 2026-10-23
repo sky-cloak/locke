@@ -1,12 +1,12 @@
 {
   "changeSets" : [ {
-    "id" : "8.0.0-resource-tag-support",
-    "author" : "keycloak",
-    "filename" : "META-INF/jpa-changelog-8.0.0.xml"
-  }, {
     "id" : "1.0.0.Final-KEYCLOAK-5461",
     "author" : "sthorger@redhat.com",
     "filename" : "META-INF/jpa-changelog-1.0.0.Final-db2.xml"
+  }, {
+    "id" : "8.0.0-resource-tag-support",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-8.0.0.xml"
   }, {
     "id" : "26.5.0-index-offline-css-by-client-storage-provider",
     "author" : "keycloak",
@@ -24,13 +24,13 @@
     "author" : "glavoie@gmail.com",
     "filename" : "META-INF/jpa-changelog-authz-3.4.0.CR1.xml"
   }, {
-    "id" : "26.7.0-login-failure-index",
-    "author" : "keycloak",
-    "filename" : "META-INF/jpa-changelog-26.7.0.xml"
-  }, {
     "id" : "26.0.0-idps-for-login",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-26.0.0.xml"
+  }, {
+    "id" : "26.7.0-login-failure-index",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.7.0.xml"
   }, {
     "id" : "3.2.0-fix",
     "author" : "keycloak",
@@ -44,17 +44,25 @@
     "author" : "bburke@redhat.com",
     "filename" : "META-INF/jpa-changelog-1.2.0.CR1-db2.xml"
   }, {
+    "id" : "26.8.0-53211-add-bucketed-root-auth-session-idx",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
+  }, {
     "id" : "25.0.0-28265-index-creation",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-25.0.0.xml"
   }, {
-    "id" : "1.6.1_from15",
-    "author" : "mposolda@redhat.com",
-    "filename" : "META-INF/jpa-changelog-1.6.1.xml"
+    "id" : "26.8.0-51854-drop-css-user-session-offline-idx",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
   }, {
     "id" : "3.2.0-fixed",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-3.2.0.xml"
+  }, {
+    "id" : "1.6.1_from15",
+    "author" : "mposolda@redhat.com",
+    "filename" : "META-INF/jpa-changelog-1.6.1.xml"
   }, {
     "id" : "1.5.0",
     "author" : "bburke@redhat.com",
@@ -68,13 +76,13 @@
     "author" : "bburke@redhat.com",
     "filename" : "META-INF/jpa-changelog-1.2.0.CR1.xml"
   }, {
-    "id" : "9.0.1-add-index-to-client.client_id",
-    "author" : "keycloak",
-    "filename" : "META-INF/jpa-changelog-9.0.1.xml"
-  }, {
     "id" : "4.2.0-KEYCLOAK-6313",
     "author" : "wadahiro@gmail.com",
     "filename" : "META-INF/jpa-changelog-4.2.0.xml"
+  }, {
+    "id" : "9.0.1-add-index-to-client.client_id",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-9.0.1.xml"
   }, {
     "id" : "26.6.0-48716-create-mssql-idp-index",
     "author" : "keycloak",
@@ -92,10 +100,6 @@
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-13.0.0.xml"
   }, {
-    "id" : "22.0.5-24031",
-    "author" : "keycloak",
-    "filename" : "META-INF/jpa-changelog-22.0.0.xml"
-  }, {
     "id" : "26.7.0-9686-dynamic-scopes-consent",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-26.7.0.xml"
@@ -103,6 +107,10 @@
     "id" : "4.7.0-KEYCLOAK-1267",
     "author" : "sguilhen@redhat.com",
     "filename" : "META-INF/jpa-changelog-4.7.0.xml"
+  }, {
+    "id" : "22.0.5-24031",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-22.0.0.xml"
   }, {
     "id" : "client-attributes-string-accomodation-fixed-post-create-index",
     "author" : "keycloak",
@@ -119,6 +127,10 @@
     "id" : "authz-2.0.0",
     "author" : "psilva@redhat.com",
     "filename" : "META-INF/jpa-changelog-authz-2.0.0.xml"
+  }, {
+    "id" : "26.8.0-51851-add-session-bucket",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
   }, {
     "id" : "24.0.0-9758-2",
     "author" : "keycloak",
@@ -140,13 +152,13 @@
     "author" : "bburke@redhat.com",
     "filename" : "META-INF/jpa-changelog-1.4.0-db2.xml"
   }, {
-    "id" : "14.0.0-KEYCLOAK-18286-supported-dbs",
-    "author" : "keycloak",
-    "filename" : "META-INF/jpa-changelog-14.0.0.xml"
-  }, {
     "id" : "2.5.0-duplicate-email-support",
     "author" : "slawomir@dabek.name",
     "filename" : "META-INF/jpa-changelog-2.5.0.xml"
+  }, {
+    "id" : "14.0.0-KEYCLOAK-18286-supported-dbs",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-14.0.0.xml"
   }, {
     "id" : "4.6.0-KEYCLOAK-8555",
     "author" : "gideonray@gmail.com",
@@ -200,13 +212,13 @@
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-26.7.0.xml"
   }, {
-    "id" : "authn-3.4.0.CR1-refresh-token-max-reuse",
-    "author" : "glavoie@gmail.com",
-    "filename" : "META-INF/jpa-changelog-authz-3.4.0.CR1.xml"
-  }, {
     "id" : "25.0.0-28265-index-2-mysql",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-25.0.0.xml"
+  }, {
+    "id" : "authn-3.4.0.CR1-refresh-token-max-reuse",
+    "author" : "glavoie@gmail.com",
+    "filename" : "META-INF/jpa-changelog-authz-3.4.0.CR1.xml"
   }, {
     "id" : "24.0.0-9758",
     "author" : "keycloak",
@@ -227,6 +239,10 @@
     "id" : "13.0.0-increase-column-size-federated",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-13.0.0.xml"
+  }, {
+    "id" : "26.8.0-org-domain-add-realm-id",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
   }, {
     "id" : "1.8.0",
     "author" : "mposolda@redhat.com",
@@ -256,13 +272,13 @@
     "author" : "glavoie@gmail.com",
     "filename" : "META-INF/jpa-changelog-authz-3.4.0.CR1.xml"
   }, {
-    "id" : "14.0.0-KEYCLOAK-18286-revert",
-    "author" : "keycloak",
-    "filename" : "META-INF/jpa-changelog-14.0.0.xml"
-  }, {
     "id" : "3.4.0",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-3.4.0.xml"
+  }, {
+    "id" : "14.0.0-KEYCLOAK-18286-revert",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-14.0.0.xml"
   }, {
     "id" : "26.0.0-org-indexes",
     "author" : "keycloak",
@@ -316,6 +332,10 @@
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-21.0.2.xml"
   }, {
+    "id" : "26.8.0-org-domain-add-idp-columns",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
+  }, {
     "id" : "25.0.0-28265-index-cleanup-css-preload",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-25.0.0.xml"
@@ -336,6 +356,10 @@
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-26.7.0.xml"
   }, {
+    "id" : "26.8.0-org-idp-and-domain-routing-migration",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
+  }, {
     "id" : "26.6.0-add-last-modified-timestamp-user",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-26.6.0.xml"
@@ -343,6 +367,10 @@
     "id" : "26.7.0-cluster-event",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-26.7.0.xml"
+  }, {
+    "id" : "1.4.0",
+    "author" : "bburke@redhat.com",
+    "filename" : "META-INF/jpa-changelog-1.4.0.xml"
   }, {
     "id" : "4.0.0-KEYCLOAK-5579-fixed",
     "author" : "mposolda@redhat.com",
@@ -352,13 +380,17 @@
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-12.0.0.xml"
   }, {
-    "id" : "1.4.0",
-    "author" : "bburke@redhat.com",
-    "filename" : "META-INF/jpa-changelog-1.4.0.xml"
-  }, {
     "id" : "1.9.2",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-1.9.2.xml"
+  }, {
+    "id" : "26.8.0-org-domain-realm-id-not-null",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
+  }, {
+    "id" : "26.8.0-idp-mapper-organization-id",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
   }, {
     "id" : "2.2.0",
     "author" : "bburke@redhat.com",
@@ -400,6 +432,10 @@
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-3.3.0.xml"
   }, {
+    "id" : "26.8.0-backfill-group-org-id",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
+  }, {
     "id" : "31725-index-persist-revoked-access-tokens",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-26.0.0.xml"
@@ -432,13 +468,13 @@
     "author" : "hmlnarik@redhat.com",
     "filename" : "META-INF/jpa-changelog-authz-4.2.0.Final.xml"
   }, {
-    "id" : "26.5.0-add-remember-me",
-    "author" : "keycloak",
-    "filename" : "META-INF/jpa-changelog-26.5.0.xml"
-  }, {
     "id" : "26.2.6-39866-duplicate",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-26.2.6.xml"
+  }, {
+    "id" : "26.5.0-add-remember-me",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.5.0.xml"
   }, {
     "id" : "14.0.0-KEYCLOAK-18286",
     "author" : "keycloak",
@@ -476,6 +512,10 @@
     "author" : "bburke@redhat.com",
     "filename" : "META-INF/jpa-changelog-2.5.0.xml"
   }, {
+    "id" : "26.8.0-51851-drop-old-expiration-idx-last-refresh",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
+  }, {
     "id" : "4.6.0-KEYCLOAK-7950",
     "author" : "psilva@redhat.com",
     "filename" : "META-INF/jpa-changelog-4.6.0.xml"
@@ -491,6 +531,10 @@
     "id" : "26.7.0-issued-ver-credential-expires-at-index",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-26.7.0.xml"
+  }, {
+    "id" : "26.8.0-53211-add-root-auth-session-timestamp-coarse",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
   }, {
     "id" : "4.8.0-KEYCLOAK-8835",
     "author" : "sguilhen@redhat.com",
@@ -520,6 +564,10 @@
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-20.0.0.xml"
   }, {
+    "id" : "26.8.0-53211-add-root-auth-session-bucket",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
+  }, {
     "id" : "26.7.0-persistent-auth-session-root-index",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-26.7.0.xml"
@@ -528,13 +576,21 @@
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-26.2.0.xml"
   }, {
-    "id" : "26.7.0-add-timestamps-client",
+    "id" : "26.8.0-51900-add-last-session-refresh-coarse",
     "author" : "keycloak",
-    "filename" : "META-INF/jpa-changelog-26.7.0.xml"
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
   }, {
     "id" : "26.0.0-33201-org-redirect-url",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-26.0.0.xml"
+  }, {
+    "id" : "26.7.0-add-timestamps-client",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.7.0.xml"
+  }, {
+    "id" : "26.8.0-drop-idp-organization-id",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
   }, {
     "id" : "2.4.0",
     "author" : "bburke@redhat.com",
@@ -556,9 +612,17 @@
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-20.0.0.xml"
   }, {
+    "id" : "26.8.0-53211-drop-old-root-auth-session-idx",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
+  }, {
     "id" : "40343-workflow-state-table",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-26.4.0.xml"
+  }, {
+    "id" : "unique-consentuser",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-25.0.0.xml"
   }, {
     "id" : "authz-3.4.0.CR1-resource-server-pk-change-part2-KEYCLOAK-6095",
     "author" : "hmlnarik@redhat.com",
@@ -567,10 +631,6 @@
     "id" : "18.0.15-30992-index-consent",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-18.0.15.xml"
-  }, {
-    "id" : "unique-consentuser",
-    "author" : "keycloak",
-    "filename" : "META-INF/jpa-changelog-25.0.0.xml"
   }, {
     "id" : "26.6.0-45009-broker-link-identity-provider",
     "author" : "keycloak",
@@ -596,17 +656,21 @@
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-20.0.0.xml"
   }, {
-    "id" : "3.4.2",
-    "author" : "keycloak",
-    "filename" : "META-INF/jpa-changelog-3.4.2.xml"
-  }, {
     "id" : "1.6.0",
     "author" : "mposolda@redhat.com",
     "filename" : "META-INF/jpa-changelog-1.6.0.xml"
   }, {
+    "id" : "3.4.2",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-3.4.2.xml"
+  }, {
     "id" : "3.4.2-KEYCLOAK-5172",
     "author" : "mkanis@redhat.com",
     "filename" : "META-INF/jpa-changelog-3.4.2.xml"
+  }, {
+    "id" : "26.7.0-50970",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.7.0.xml"
   }, {
     "id" : "26.7.0-single-use-object-table",
     "author" : "keycloak",
@@ -616,13 +680,13 @@
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-26.5.0.xml"
   }, {
-    "id" : "authz-3.4.0.CR1-resource-server-pk-change-part3-fixed",
-    "author" : "glavoie@gmail.com",
-    "filename" : "META-INF/jpa-changelog-authz-3.4.0.CR1.xml"
-  }, {
     "id" : "26.5.0-remove-workflow-provider-id-column",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-26.5.0.xml"
+  }, {
+    "id" : "authz-3.4.0.CR1-resource-server-pk-change-part3-fixed",
+    "author" : "glavoie@gmail.com",
+    "filename" : "META-INF/jpa-changelog-authz-3.4.0.CR1.xml"
   }, {
     "id" : "26.4.0-51321",
     "author" : "keycloak",
@@ -640,6 +704,10 @@
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-11.0.0.xml"
   }, {
+    "id" : "26.8.0-org-domain-populate-realm-id",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
+  }, {
     "id" : "8.0.0-updating-credential-data-oracle-fixed",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-8.0.0.xml"
@@ -656,6 +724,10 @@
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-24.0.0.xml"
   }, {
+    "id" : "26.8.0-org-domain-add-org-fk",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
+  }, {
     "id" : "26.7.0-outbox",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-26.7.0.xml"
@@ -668,17 +740,21 @@
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-26.0.0.xml"
   }, {
+    "id" : "26.8.0-51851-drop-old-expiration-idx-created",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
+  }, {
     "id" : "1.8.0",
     "author" : "mposolda@redhat.com",
     "filename" : "META-INF/jpa-changelog-1.8.0.xml"
   }, {
-    "id" : "1.9.1",
-    "author" : "keycloak",
-    "filename" : "META-INF/jpa-changelog-1.9.1.xml"
-  }, {
     "id" : "26.7.0-issued-ver-credential-vc-id-index",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-26.7.0.xml"
+  }, {
+    "id" : "1.9.1",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-1.9.1.xml"
   }, {
     "id" : "3.2.0-fix-with-keycloak-5416",
     "author" : "keycloak",
@@ -688,13 +764,13 @@
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-13.0.0.xml"
   }, {
-    "id" : "9.0.1-KEYCLOAK-12579-drop-constraints",
-    "author" : "keycloak",
-    "filename" : "META-INF/jpa-changelog-9.0.1.xml"
-  }, {
     "id" : "26.4.0-40933-saml-encryption-attributes",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-26.4.0.xml"
+  }, {
+    "id" : "9.0.1-KEYCLOAK-12579-drop-constraints",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-9.0.1.xml"
   }, {
     "id" : "authz-4.2.0.Final",
     "author" : "mhajas@redhat.com",
@@ -716,17 +792,25 @@
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-26.5.0.xml"
   }, {
-    "id" : "22.0.0-17484-updated",
+    "id" : "26.8.0-auth-session-auth-user-id-index",
     "author" : "keycloak",
-    "filename" : "META-INF/jpa-changelog-22.0.0.xml"
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
   }, {
     "id" : "3.2.0-fix-offline-sessions",
     "author" : "hmlnarik",
     "filename" : "META-INF/jpa-changelog-3.2.0.xml"
   }, {
+    "id" : "22.0.0-17484-updated",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-22.0.0.xml"
+  }, {
     "id" : "26.1.0-34380",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-26.1.0.xml"
+  }, {
+    "id" : "26.8.0-create-org-identity-provider",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
   }, {
     "id" : "26.7.0-federated-issued-ver-credential",
     "author" : "keycloak",
@@ -735,6 +819,10 @@
     "id" : "26.6.0-44424-index-css-user-session-and-offline",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-26.6.0.xml"
+  }, {
+    "id" : "26.8.0-51900-51851-add-bucketed-and-coarse-expiration-idx-last-refresh",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
   }, {
     "id" : "8.0.0-adding-credential-columns",
     "author" : "keycloak",
@@ -752,13 +840,13 @@
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-13.0.0.xml"
   }, {
-    "id" : "default-roles-cleanup",
-    "author" : "keycloak",
-    "filename" : "META-INF/jpa-changelog-13.0.0.xml"
-  }, {
     "id" : "1.2.0.Final",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-1.2.0.Final.xml"
+  }, {
+    "id" : "default-roles-cleanup",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-13.0.0.xml"
   }, {
     "id" : "26.5.0-mysql-mariadb-default-charset-collation",
     "author" : "keycloak",
@@ -772,11 +860,15 @@
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-26.6.0.xml"
   }, {
-    "id" : "1.6.1_from16-pre",
-    "author" : "mposolda@redhat.com",
-    "filename" : "META-INF/jpa-changelog-1.6.1.xml"
+    "id" : "26.8.0-51851-add-bucketed-expiration-idx-created",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
   }, {
-    "id" : "1.6.1_from16",
+    "id" : "26.8.0-org-domain-add-idp-fk",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
+  }, {
+    "id" : "1.6.1_from16-pre",
     "author" : "mposolda@redhat.com",
     "filename" : "META-INF/jpa-changelog-1.6.1.xml"
   }, {
@@ -784,9 +876,17 @@
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-26.7.0.xml"
   }, {
+    "id" : "1.6.1_from16",
+    "author" : "mposolda@redhat.com",
+    "filename" : "META-INF/jpa-changelog-1.6.1.xml"
+  }, {
     "id" : "24.0.0-26618-reindex",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-24.0.0.xml"
+  }, {
+    "id" : "26.8.0-51854-drop-broker-session-idx",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
   }, {
     "id" : "26.2.6-39866-uk",
     "author" : "keycloak",
@@ -799,6 +899,10 @@
     "id" : "26.7.0-46204-issued-ver-credential-table",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-26.7.0.xml"
+  }, {
+    "id" : "26.8.0-51854-add-filtered-broker-session-idx",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
   }, {
     "id" : "authz-2.5.1",
     "author" : "psilva@redhat.com",
@@ -823,6 +927,10 @@
     "id" : "12.1.0-add-realm-localization-table",
     "author" : "keycloak",
     "filename" : "META-INF/jpa-changelog-12.0.0.xml"
+  }, {
+    "id" : "26.8.0-53211-add-root-auth-session-created-on",
+    "author" : "keycloak",
+    "filename" : "META-INF/jpa-changelog-26.8.0.xml"
   }, {
     "id" : "25.0.0-28265-index-2-not-mysql",
     "author" : "keycloak",

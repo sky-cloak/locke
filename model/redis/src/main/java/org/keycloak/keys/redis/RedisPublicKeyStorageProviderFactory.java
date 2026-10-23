@@ -24,6 +24,7 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 
 import org.keycloak.Config;
+import org.keycloak.cluster.ClusterProvider;
 import org.keycloak.keys.PublicKeyStorageProvider;
 import org.keycloak.keys.PublicKeyStorageProviderFactory;
 import org.keycloak.models.KeycloakSession;
@@ -49,6 +50,7 @@ public class RedisPublicKeyStorageProviderFactory implements PublicKeyStoragePro
     public static final String KEYS_CLEAR_CACHE_EVENTS = "KEYS_CLEAR_CACHE_EVENTS";
 
     private volatile Cache<String, PublicKeysEntry> keysCache;
+    private volatile boolean listenerRegistered;
 
     private final Map<String, FutureTask<PublicKeysEntry>> tasksInProgress = new ConcurrentHashMap<>();
 
@@ -58,6 +60,7 @@ public class RedisPublicKeyStorageProviderFactory implements PublicKeyStoragePro
     @Override
     public PublicKeyStorageProvider create(KeycloakSession session) {
         lazyInit();
+        registerClearListener(session);
         return new RedisPublicKeyStorageProvider(keysCache, tasksInProgress, minTimeBetweenRequests, maxCacheTime);
     }
 
@@ -96,6 +99,29 @@ public class RedisPublicKeyStorageProviderFactory implements PublicKeyStoragePro
     @Override
     public void postInit(KeycloakSessionFactory factory) {
         // No cross-node invalidation: keys are per-node, refreshed by TTL (see the provider javadoc).
+    }
+
+    /**
+     * Applies a clear that another node initiated. Registered by the storage factory, which
+     * every node with something cached has created, rather than by the cache provider, which
+     * only a node that served an admin clear itself has: upstream moved its listeners the same
+     * way, so a clear reaches every node.
+     */
+    private void registerClearListener(KeycloakSession session) {
+        if (listenerRegistered) {
+            return;
+        }
+        synchronized (this) {
+            if (listenerRegistered) {
+                return;
+            }
+            ClusterProvider cluster = session.getProvider(ClusterProvider.class);
+            if (cluster == null) {
+                return;
+            }
+            cluster.registerListener(KEYS_CLEAR_CACHE_EVENTS, event -> clearCache());
+            listenerRegistered = true;
+        }
     }
 
     /** Drops this node's cached keys. Fanning the clear out to the other nodes is the

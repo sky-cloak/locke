@@ -4,7 +4,7 @@
     <parent>
         <artifactId>keycloak-tests-parent</artifactId>
         <groupId>org.keycloak.tests</groupId>
-        <version>26.7.1</version>
+        <version>26.8.1</version>
         <relativePath>../../tests/pom.xml</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>

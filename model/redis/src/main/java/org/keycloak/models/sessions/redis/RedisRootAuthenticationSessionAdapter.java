@@ -168,4 +168,9 @@ public class RedisRootAuthenticationSessionAdapter implements RootAuthentication
         entity.getAuthenticationSessions().put(tabId, childEntity);
         provider.persistTab(realm, entity.getId(), tabId, childEntity);
     }
+
+    /** Called by a child auth session adapter once a user is authenticated in it. */
+    void onChildAuthenticated(String userId) {
+        provider.indexAuthenticatedUser(realm, entity.getId(), userId);
+    }
 }

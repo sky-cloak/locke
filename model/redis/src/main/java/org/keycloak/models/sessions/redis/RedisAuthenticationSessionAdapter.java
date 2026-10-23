@@ -74,6 +74,9 @@ public class RedisAuthenticationSessionAdapter implements AuthenticationSessionM
     public void setAuthenticatedUser(UserModel user) {
         entity.setAuthUserId(user == null ? null : user.getId());
         update();
+        if (user != null) {
+            parent.onChildAuthenticated(user.getId());
+        }
     }
 
     @Override

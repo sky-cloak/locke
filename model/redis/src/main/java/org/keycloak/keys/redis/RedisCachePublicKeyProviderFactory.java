@@ -17,7 +17,6 @@
 package org.keycloak.keys.redis;
 
 import org.keycloak.Config;
-import org.keycloak.cluster.ClusterProvider;
 import org.keycloak.keys.PublicKeyStorageProvider;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
@@ -36,12 +35,9 @@ public class RedisCachePublicKeyProviderFactory implements CachePublicKeyProvide
 
     public static final String PROVIDER_ID = "redis";
 
-    private volatile boolean listenerRegistered;
-
     @Override
     public CachePublicKeyProvider create(KeycloakSession session) {
         RedisPublicKeyStorageProviderFactory storage = storageFactory(session);
-        registerClearListener(session, storage);
         return new RedisCachePublicKeyProvider(session, storage);
     }
 
@@ -53,22 +49,6 @@ public class RedisCachePublicKeyProviderFactory implements CachePublicKeyProvide
                     + (factory == null ? "none" : factory.getClass().getName()));
         }
         return redisFactory;
-    }
-
-    /** Applies a clear that another node initiated. */
-    private void registerClearListener(KeycloakSession session, RedisPublicKeyStorageProviderFactory storage) {
-        if (listenerRegistered) {
-            return;
-        }
-        synchronized (this) {
-            if (listenerRegistered) {
-                return;
-            }
-            session.getProvider(ClusterProvider.class).registerListener(
-                    RedisPublicKeyStorageProviderFactory.KEYS_CLEAR_CACHE_EVENTS,
-                    event -> storage.clearCache());
-            listenerRegistered = true;
-        }
     }
 
     @Override

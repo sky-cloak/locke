@@ -1,6 +1,6 @@
 {
   "name": "@keycloak/keycloak-admin-client",
-  "version": "26.7.1",
+  "version": "26.8.1",
   "description": "A client to interact with Keycloak's Administration API",
   "type": "module",
   "main": "lib/index.js",
@@ -81,7 +81,7 @@
     "url-template": "^3.1.1"
   },
   "devDependencies": {
-    "@faker-js/faker": "^10.2.0",
+    "@faker-js/faker": "^10.5.0",
     "@kiota-community/kiota-gen": "^1.0.2",
     "@types/chai": "^5.2.2",
     "@types/lodash-es": "^4.17.12",

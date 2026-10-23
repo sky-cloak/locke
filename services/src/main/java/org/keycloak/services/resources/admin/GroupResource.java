@@ -106,7 +106,7 @@ public class GroupResource {
         this.auth.groups().requireView(group);
 
         GroupRepresentation rep = GroupUtils.toRepresentation(this.auth.groups(), group, true);
-
+        GroupUtils.filterRolesInRepresentation(rep, realm, session, auth);
         rep.setAccess(auth.groups().getAccess(group));
 
         return GroupUtils.populateSubGroupCount(group, rep);
@@ -128,6 +128,10 @@ public class GroupResource {
     })
     public Response updateGroup(GroupRepresentation rep) {
         this.auth.groups().requireManage(group);
+
+        if (rep == null) {
+            throw ErrorResponse.error("Group representation is missing", Response.Status.BAD_REQUEST);
+        }
 
         String groupName = rep.getName();
 
@@ -199,6 +203,9 @@ public class GroupResource {
         return paginatedStream(stream, first, max)
             .map(g -> {
                 GroupRepresentation rep = GroupUtils.toRepresentation(auth.groups(), g, !briefRepresentation);
+                if (!briefRepresentation) {
+                    GroupUtils.filterRolesInRepresentation(rep, realm, session, auth);
+                }
 
                 if (subGroupsCount) {
                     return GroupUtils.populateSubGroupCount(g, rep);
@@ -229,6 +236,10 @@ public class GroupResource {
     })
     public Response addChild(GroupRepresentation rep) {
         this.auth.groups().requireManage(group);
+
+        if (rep == null) {
+            throw ErrorResponse.error("Group representation is missing", Response.Status.BAD_REQUEST);
+        }
 
         String groupName = rep.getName();
         if (isBlank(groupName)) {
