@@ -1,0 +1,79 @@
+name: bench-f-redis-prom
+# Lightweight, Prometheus-instrumented standalone-Redis rig for local validation (NOT the OVH
+# 3-pod benchmark). One Locke with a capped heap + tiny Redis/Postgres/Prometheus/redis_exporter.
+# Used to validate: the metrics pipeline, steady-state, and the Redis-outage fail-fast / the
+# KC_CACHE_REDIS_TIMEOUT knob. Set REDIS_TIMEOUT to change the fail-fast window (default 2000ms).
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    command: ["--redis.addr=redis://redis:6379"]
+    mem_limit: 64m
+    depends_on:
+      redis:
+        condition: service_started
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  keycloak:
+    image: localhost:5011/keycloak:999.0.0-redis
+    command: ["start-dev", "--hostname-strict=false"]
+    mem_limit: 1024m
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KC_CACHE: redis
+      KC_CACHE_REDIS_URL: "redis://redis:6379"
+      KC_CACHE_REDIS_TIMEOUT: "${REDIS_TIMEOUT:-1000}"
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      KC_HTTP_METRICS_HISTOGRAMS_ENABLED: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      JAVA_OPTS_APPEND: "-Xms256m -Xmx768m -XX:+UseG1GC"
+    ports:
+      - "18088:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=1h
+      - --storage.tsdb.retention.size=256MB
+    volumes:
+      - ./prom/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    mem_limit: 256m
+    ports:
+      - "19090:9090"
+    depends_on:
+      keycloak:
+        condition: service_started

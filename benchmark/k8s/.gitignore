@@ -1,0 +1,9 @@
+# Build artifacts (large binaries — rebuilt from the kcb dist / image builds)
+images/*.jar
+images/*.tar.gz
+images/keycloak-*.tar.gz
+# Raw per-run KC logs are verbose; keep the summaries + zipped evidence, not the loose logs
+results/**/*.log
+results/**/kc-logs/
+results/**/logs/
+results/**/*.zip

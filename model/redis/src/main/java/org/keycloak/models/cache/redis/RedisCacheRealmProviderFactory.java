@@ -1,0 +1,111 @@
+/*
+ * Copyright 2016 Red Hat, Inc. and/or its affiliates
+ * and other contributors as indicated by the @author tags.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.keycloak.models.cache.redis;
+
+import org.keycloak.cache.redis.RedisCache;
+import org.jboss.logging.Logger;
+import org.keycloak.Config;
+import org.keycloak.cluster.ClusterEvent;
+import org.keycloak.cluster.ClusterProvider;
+import org.keycloak.connections.redis.RedisConnectionProvider;
+import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.KeycloakSessionFactory;
+import org.keycloak.models.cache.CacheRealmProvider;
+import org.keycloak.models.cache.CacheRealmProviderFactory;
+import org.keycloak.models.cache.redis.entities.Revisioned;
+import org.keycloak.models.cache.redis.events.InvalidationEvent;
+import org.keycloak.provider.EnvironmentDependentProviderFactory;
+
+/**
+ * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
+ * @author <a href="mailto:sthorger@redhat.com">Stian Thorgersen</a>
+ */
+public class RedisCacheRealmProviderFactory implements CacheRealmProviderFactory, EnvironmentDependentProviderFactory {
+
+    private static final Logger log = Logger.getLogger(RedisCacheRealmProviderFactory.class);
+    public static final String REALM_CLEAR_CACHE_EVENTS = "REALM_CLEAR_CACHE_EVENTS";
+    public static final String REALM_INVALIDATION_EVENTS = "REALM_INVALIDATION_EVENTS";
+
+    protected volatile RealmCacheManager realmCache;
+
+    @Override
+    public CacheRealmProvider create(KeycloakSession session) {
+        lazyInit(session);
+        return new RealmCacheSession(realmCache, session);
+    }
+
+    private void lazyInit(KeycloakSession session) {
+        if (realmCache == null) {
+            synchronized (this) {
+                if (realmCache == null) {
+                    RedisCache<String, Revisioned> cache = session.getProvider(RedisConnectionProvider.class).getCache(RedisConnectionProvider.REALM_CACHE_NAME);
+                    RedisCache<String, Long> revisions = session.getProvider(RedisConnectionProvider.class).getCache(RedisConnectionProvider.REALM_REVISIONS_CACHE_NAME);
+                    realmCache = new RealmCacheManager(cache, revisions);
+
+                    ClusterProvider cluster = session.getProvider(ClusterProvider.class);
+                    cluster.registerListener(REALM_INVALIDATION_EVENTS, (ClusterEvent event) -> {
+
+                        InvalidationEvent invalidationEvent = (InvalidationEvent) event;
+                        realmCache.invalidationEventReceived(invalidationEvent);
+
+                    });
+
+                    cluster.registerListener(REALM_CLEAR_CACHE_EVENTS, (ClusterEvent event) -> {
+
+                        realmCache.clear();
+
+                    });
+
+                    log.debug("Registered cluster listeners");
+                }
+            }
+        }
+    }
+
+    @Override
+    public void init(Config.Scope config) {
+    }
+
+    @Override
+    public void postInit(KeycloakSessionFactory factory) {
+
+    }
+
+    @Override
+    public void close() {
+    }
+
+    @Override
+    public String getId() {
+        // MUST differ from InfinispanCacheRealmProviderFactory.getId() ("default").
+        // ProviderManager dedups by (spi-name + "-" + factory-id) BEFORE isSupported runs;
+        // shared id → silent override. See docs/redis-cache-architecture.md "Provider activation".
+        //
+        // Iter-7 made this safe to enable: the realm/user/authorization caches are now L1-only
+        // (Caffeine in-JVM with cross-pod pub/sub invalidation, PostgreSQL as source of truth).
+        // The CachedRealm-style entities that hold non-Serializable lambda fields never go to
+        // Redis L2; only the L1 invalidation channel touches Redis for these caches.
+        return "redis";
+    }
+
+    @Override
+    public boolean isSupported(Config.Scope config) {
+        return "redis".equals(config.root().get("cache"));
+    }
+
+}

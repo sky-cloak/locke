@@ -21,8 +21,9 @@ import org.keycloak.models.IdentityProviderStorageProvider;
 import org.keycloak.models.IdentityProviderStorageProviderFactory;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
+import org.keycloak.provider.EnvironmentDependentProviderFactory;
 
-public class InfinispanIdentityProviderStorageProviderFactory implements IdentityProviderStorageProviderFactory<IdentityProviderStorageProvider> {
+public class InfinispanIdentityProviderStorageProviderFactory implements IdentityProviderStorageProviderFactory<IdentityProviderStorageProvider>, EnvironmentDependentProviderFactory {
 
     public static final String PROVIDER_ID = "infinispan";
 
@@ -51,5 +52,10 @@ public class InfinispanIdentityProviderStorageProviderFactory implements Identit
     @Override
     public int order() {
         return 10;
+    }
+
+    @Override
+    public boolean isSupported(Config.Scope config) {
+        return !"redis".equals(config.root().get("cache"));
     }
 }

@@ -1,0 +1,41 @@
+# Same-version migration test — END state: Locke 26.6.1 (Redis). Applied OVER mig-vanilla.yaml
+# to roll the kc-mig StatefulSet from Infinispan to Redis (image + cache env change), same KC version.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: kc-mig, namespace: locke-bench }
+spec:
+  serviceName: kc-mig-headless
+  replicas: 3
+  selector: { matchLabels: { app: kc-mig } }
+  template:
+    metadata: { labels: { app: kc-mig } }
+    spec:
+      nodeSelector: { bench-role: kc }
+      imagePullSecrets: [ { name: ghcr-pull } ]
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector: { matchLabels: { app: kc-mig } }
+      containers:
+        - name: keycloak
+          image: ghcr.io/sky-cloak/locke-bench-locke:26.6.1
+          env:
+            - { name: KC_DB, value: postgres }
+            - { name: KC_DB_URL, value: "jdbc:postgresql://postgres:5432/keycloak" }
+            - { name: KC_DB_USERNAME, value: keycloak }
+            - { name: KC_DB_PASSWORD, value: keycloak }
+            - { name: KC_DB_POOL_MAX_SIZE, value: "50" }
+            - { name: KC_CACHE_REDIS_URL, value: "redis://redis:6379" }
+            - { name: KC_SPI_CONNECTIONS_REDIS__DEFAULT__URL, value: "redis://redis:6379" }
+            - { name: KC_HOSTNAME_STRICT, value: "false" }
+            - { name: KC_HTTP_ENABLED, value: "true" }
+            - { name: KC_PROXY_HEADERS, value: xforwarded }
+            - { name: KC_BOOTSTRAP_ADMIN_USERNAME, value: admin }
+            - { name: KC_BOOTSTRAP_ADMIN_PASSWORD, value: admin }
+            - { name: JAVA_OPTS_APPEND, value: "-Xms2g -Xmx4g -XX:+UseG1GC" }
+          ports: [ { name: http, containerPort: 8080 }, { name: mgmt, containerPort: 9000 } ]
+          resources:
+            requests: { cpu: "6", memory: 6Gi }
+            limits: { cpu: "6", memory: 6Gi }
+          readinessProbe: { httpGet: { path: /health/ready, port: 9000 }, initialDelaySeconds: 20, periodSeconds: 5, failureThreshold: 60 }

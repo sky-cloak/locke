@@ -1,0 +1,43 @@
+{
+  "realm": "bench",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": false,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "offlineSessionIdleTimeout": 2592000,
+  "clients": [
+    {
+      "clientId": "bench-client",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "bench-secret",
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["*"],
+      "webOrigins": ["*"],
+      "attributes": {
+        "access.token.lifespan": "300"
+      }
+    }
+  ],
+  "users": [
+    {"username": "user1", "enabled": true, "email": "user1@bench.test", "emailVerified": true, "firstName": "U", "lastName": "1", "credentials":[{"type":"password","value":"pw","temporary":false}]},
+    {"username": "user2", "enabled": true, "email": "user2@bench.test", "emailVerified": true, "firstName": "U", "lastName": "2", "credentials":[{"type":"password","value":"pw","temporary":false}]},
+    {"username": "user3", "enabled": true, "email": "user3@bench.test", "emailVerified": true, "firstName": "U", "lastName": "3", "credentials":[{"type":"password","value":"pw","temporary":false}]},
+    {"username": "user4", "enabled": true, "email": "user4@bench.test", "emailVerified": true, "firstName": "U", "lastName": "4", "credentials":[{"type":"password","value":"pw","temporary":false}]},
+    {"username": "user5", "enabled": true, "email": "user5@bench.test", "emailVerified": true, "firstName": "U", "lastName": "5", "credentials":[{"type":"password","value":"pw","temporary":false}]},
+    {"username": "user6", "enabled": true, "email": "user6@bench.test", "emailVerified": true, "firstName": "U", "lastName": "6", "credentials":[{"type":"password","value":"pw","temporary":false}]},
+    {"username": "user7", "enabled": true, "email": "user7@bench.test", "emailVerified": true, "firstName": "U", "lastName": "7", "credentials":[{"type":"password","value":"pw","temporary":false}]},
+    {"username": "user8", "enabled": true, "email": "user8@bench.test", "emailVerified": true, "firstName": "U", "lastName": "8", "credentials":[{"type":"password","value":"pw","temporary":false}]},
+    {"username": "user9", "enabled": true, "email": "user9@bench.test", "emailVerified": true, "firstName": "U", "lastName": "9", "credentials":[{"type":"password","value":"pw","temporary":false}]},
+    {"username": "user10", "enabled": true, "email": "user10@bench.test", "emailVerified": true, "firstName": "U", "lastName": "10", "credentials":[{"type":"password","value":"pw","temporary":false}]}
+  ]
+}

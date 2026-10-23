@@ -1,0 +1,11 @@
+# Auto-generated Gatling HTML reports / k6 outputs / Docker dist tarballs.
+# Each run produces ~100 files; not useful in version control.
+results/
+docker/keycloak-*.tar.gz
+docker/keycloak-*.zip
+
+# Locally-cloned keycloak-benchmark (rebuild via the README).
+# kcb/keycloak-benchmark/  ← excluded as a separate git repo, see below
+kcb/keycloak-benchmark-*/
+kcb/keycloak-benchmark-dataset-*.jar
+kcb/keycloak-benchmark-*.tar.gz

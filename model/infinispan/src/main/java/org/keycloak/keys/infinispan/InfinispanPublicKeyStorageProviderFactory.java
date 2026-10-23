@@ -35,6 +35,7 @@ import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.models.RealmModel;
+import org.keycloak.provider.EnvironmentDependentProviderFactory;
 import org.keycloak.provider.ProviderConfigProperty;
 import org.keycloak.provider.ProviderConfigurationBuilder;
 import org.keycloak.provider.ProviderEvent;
@@ -46,7 +47,7 @@ import org.jboss.logging.Logger;
 /**
  * @author <a href="mailto:mposolda@redhat.com">Marek Posolda</a>
  */
-public class InfinispanPublicKeyStorageProviderFactory implements PublicKeyStorageProviderFactory {
+public class InfinispanPublicKeyStorageProviderFactory implements PublicKeyStorageProviderFactory, EnvironmentDependentProviderFactory {
 
     private static final Logger log = Logger.getLogger(InfinispanPublicKeyStorageProviderFactory.class);
 
@@ -197,5 +198,10 @@ public class InfinispanPublicKeyStorageProviderFactory implements PublicKeyStora
     @Override
     public String getId() {
         return PROVIDER_ID;
+    }
+
+    @Override
+    public boolean isSupported(Config.Scope config) {
+        return !"redis".equals(config.root().get("cache"));
     }
 }

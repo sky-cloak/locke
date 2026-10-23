@@ -1,0 +1,96 @@
+name: bench-b3-redis-3pod
+# Three-pod Skycloak (iteration 4) sharing one Redis. No JGroups — cross-node
+# coordination is via Redis pub/sub for L1 invalidation. Same nginx LB as A3.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  keycloak1: &kc
+    image: localhost:5011/keycloak:999.0.0-redis-iter7
+    command: ["start-dev", "--hostname-strict=false", "--import-realm"]
+    volumes:
+      - ../realm-bench.json:/opt/keycloak/data/import/realm-bench.json:ro
+      - ../realm-bench-kcb.json:/opt/keycloak/data/import/realm-bench-kcb.json:ro
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KC_CACHE: redis
+      KC_CACHE_REDIS_URL: redis://redis:6379
+      KC_HTTP_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_PROXY_HEADERS: xforwarded
+      KC_HOSTNAME: http://0.0.0.0:18084
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "false"
+      JAVA_OPTS_APPEND: "-Xms512m -Xmx1500m"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/realms/master || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 60s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+          cpus: "1.5"
+
+  keycloak2:
+    <<: *kc
+    depends_on:
+      keycloak1:
+        condition: service_healthy
+
+  keycloak3:
+    <<: *kc
+    depends_on:
+      keycloak1:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./nginx-3pod.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "18084:80"
+    depends_on:
+      keycloak1:
+        condition: service_healthy
+      keycloak2:
+        condition: service_healthy
+      keycloak3:
+        condition: service_healthy

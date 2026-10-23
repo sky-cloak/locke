@@ -1,0 +1,246 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Locke — Cross-Backend Cache Comparison</title>
+<style>
+:root{--blue:#3b82f6;--bg:#0f172a;--bg2:#1e293b;--card:rgba(255,255,255,.05);--bd:rgba(255,255,255,.1);
+--tx:#e2e8f0;--mut:#94a3b8;--good:#22c55e;--bad:#ef4444;--amber:#f59e0b}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Inter,sans-serif;background:var(--bg);color:var(--tx);line-height:1.6}
+.wrap{max-width:960px;margin:0 auto;padding:0 20px}
+header{background:linear-gradient(135deg,#0f172a,#1e293b);padding:64px 0 48px;border-bottom:1px solid var(--bd)}
+.badge{display:inline-block;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--blue);
+border:1px solid var(--bd);border-radius:999px;padding:5px 14px;margin-bottom:18px}
+h1{font-size:38px;line-height:1.15;margin:0 0 14px;color:#fff}
+h2{font-size:26px;margin:48px 0 8px;color:#fff}
+h3{font-size:18px;margin:28px 0 6px;color:#fff}
+.sub{color:var(--mut);font-size:18px;max-width:740px}
+.lead{color:var(--tx);font-size:17px}
+section{padding:8px 0 12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:22px 24px;margin:16px 0;backdrop-filter:blur(10px)}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:18px 0}
+.stat{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:20px;backdrop-filter:blur(10px)}
+.stat .n{font-size:30px;font-weight:700;color:#fff}
+.stat .l{color:var(--mut);font-size:14px;margin-top:4px}
+.chart{width:100%;height:auto;background:rgba(0,0,0,.18);border:1px solid var(--bd);border-radius:12px;margin:14px 0}
+.ctitle{fill:#fff;font:600 16px system-ui} .axis{fill:#94a3b8;font:12px system-ui}
+.grid{stroke:rgba(255,255,255,.08);stroke-width:1} .blabel{fill:#cbd5e1;font:13px system-ui}
+.bval{fill:#fff;font:600 13px system-ui} .leg{fill:#cbd5e1;font:12px system-ui}
+.kill{stroke:var(--amber);stroke-width:1.5;stroke-dasharray:5 4} .killt{fill:var(--amber);font:11px system-ui}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--bd)}
+th{color:var(--mut);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+td.be{font-weight:600;color:#fff;vertical-align:top;max-width:230px}
+tr.knee td{background:rgba(239,68,68,.08)} tr.hl td{background:rgba(59,130,246,.10)}
+.good{color:var(--good)} .bad{color:var(--bad)} b{color:#fff}
+.note{border-left:3px solid var(--amber);padding:10px 16px;background:rgba(245,158,11,.07);border-radius:0 8px 8px 0;margin:14px 0;color:#e2e8f0}
+ul{padding-left:20px} li{margin:6px 0}
+code{background:rgba(255,255,255,.08);padding:2px 6px;border-radius:5px;font-size:13px}
+footer{color:var(--mut);font-size:13px;padding:34px 0;border-top:1px solid var(--bd);margin-top:40px}
+.foot-rule{height:3px;background:linear-gradient(90deg,var(--blue),#1e40af);border:none;margin:0}
+</style></head><body>
+<header><div class="wrap">
+<span class="badge">Locke · Benchmark Report · 2026-06-20</span>
+<h1>Where do you run Redis for Locke?</h1>
+<p class="sub">A cross-backend comparison of cache options for the Locke (Keycloak-on-Redis) distribution: in-process Infinispan, co-located Redis (single &amp; cluster), and two managed services — AWS ElastiCache and Azure Managed Redis — across throughput, full latency distributions, and failover.</p>
+</div></header>
+<div class="wrap">
+
+<section>
+<h2>The one-paragraph answer</h2>
+<p class="lead">Managed Redis is <b>not</b> all the same. AWS ElastiCache (an OSS Redis cluster you talk to <em>directly, shard-by-shard</em>) is a perfectly viable Locke backend — p99 <b>181&nbsp;ms</b> at 80 logins/sec and a clean <b>522&nbsp;ms</b> through a node kill with zero errors. Azure Managed Redis (which funnels every request through a <em>single managed proxy endpoint</em>) is not — p99 <b>4,940&nbsp;ms</b> at the same load, ~27× worse, for this write-heavy, multi-round-trip-per-login workload. Co-located Redis is fastest of the Redis options; in-process Infinispan has the lowest latency of all but stalls for <b>37&nbsp;seconds</b> on node loss — the failure mode Locke exists to remove.</p>
+<div class="grid3">
+  <div class="stat"><div class="n">~27×</div><div class="l">ElastiCache vs Azure Managed Redis p99 @ 80 ups (181 ms vs 4,940 ms)</div></div>
+  <div class="stat"><div class="n">522 ms</div><div class="l">ElastiCache p99 through a KC pod kill — 0 errors</div></div>
+  <div class="stat"><div class="n">37,068 ms</div><div class="l">Infinispan failover p99 — the JGroups rebalance stall Locke removes</div></div>
+</div>
+</section>
+
+<section>
+<h2>1 · The managed-Redis verdict</h2>
+<p>The motivating question: <em>is a managed Redis service as slow as Azure Managed Redis was?</em> No — and the reason is architecture, not "managed vs self-hosted."</p>
+<svg viewBox="0 0 860 392" role="img" aria-label="Auth p99 latency @ 80 logins/sec — the managed-Redis verdict (log scale)" class="chart">
+<text x="430.0" y="26" class="ctitle" text-anchor="middle">Auth p99 latency @ 80 logins/sec — the managed-Redis verdict (log scale)</text>
+<line x1="330" y1="44" x2="330" y2="370" class="grid"/>
+<text x="330" y="384" class="axis" text-anchor="middle">10</text>
+<line x1="449" y1="44" x2="449" y2="370" class="grid"/>
+<text x="449" y="384" class="axis" text-anchor="middle">100</text>
+<line x1="568" y1="44" x2="568" y2="370" class="grid"/>
+<text x="568" y="384" class="axis" text-anchor="middle">1,000</text>
+<line x1="687" y1="44" x2="687" y2="370" class="grid"/>
+<text x="687" y="384" class="axis" text-anchor="middle">10,000</text>
+<text x="318" y="73.0" class="blabel" text-anchor="end">Infinispan · in-process (Azure)</text>
+<rect x="330" y="54" width="82.1" height="28" rx="4" fill="#64748b"/>
+<text x="420.1" y="73.0" class="bval">49 ms</text>
+<text x="318" y="119.0" class="blabel" text-anchor="end">Infinispan · in-process (AWS)</text>
+<rect x="330" y="100" width="109.9" height="28" rx="4" fill="#64748b"/>
+<text x="447.9" y="119.0" class="bval">84 ms</text>
+<text x="318" y="165.0" class="blabel" text-anchor="end">Co-located single redis (Azure)</text>
+<rect x="330" y="146" width="83.1" height="28" rx="4" fill="#22c55e"/>
+<text x="421.1" y="165.0" class="bval">50 ms</text>
+<text x="318" y="211.0" class="blabel" text-anchor="end">Co-located 6-node cluster (Azure)</text>
+<rect x="330" y="192" width="92.6" height="28" rx="4" fill="#10b981"/>
+<text x="430.6" y="211.0" class="bval">60 ms</text>
+<text x="318" y="257.0" class="blabel" text-anchor="end">ElastiCache · managed OSS (AWS)</text>
+<rect x="330" y="238" width="149.6" height="28" rx="4" fill="#3b82f6"/>
+<text x="487.6" y="257.0" class="bval">181 ms</text>
+<text x="318" y="303.0" class="blabel" text-anchor="end">Co-located single redis (AWS)</text>
+<rect x="330" y="284" width="164.4" height="28" rx="4" fill="#3b82f6"/>
+<text x="502.4" y="303.0" class="bval">241 ms</text>
+<text x="318" y="349.0" class="blabel" text-anchor="end">Azure Managed Redis · proxy (AMR)</text>
+<rect x="330" y="330" width="320.4" height="28" rx="4" fill="#ef4444"/>
+<text x="658.4" y="349.0" class="bval">4,940 ms</text>
+</svg>
+<p class="lead" style="margin-top:18px">Everything except Azure Managed Redis sits under ~250&nbsp;ms. AMR is alone at ~5&nbsp;seconds. The difference is the data path: <b>ElastiCache cluster-mode and co-located Redis are direct-to-shard OSS Redis</b> — Locke's client opens one connection per shard and talks straight to it. <b>AMR's working mode funnels all traffic through a single managed proxy endpoint</b>, which amplifies badly under the concurrency of 850 logins/sec each doing several Redis round-trips. Per-operation, AMR is fine (~0.6&nbsp;ms); it's the proxy funnel under load that hurts.</p>
+<table>
+<tr><th>Backend</th><th>Architecture</th><th>p99 @ 80 ups</th><th>p99 @ 250 ups</th><th>Throughput @ 250</th><th>Pod-loss p99</th><th>Verdict</th></tr>
+<tr><td>Upstream Infinispan</td><td>In-process (JGroups)</td><td>49 ms</td><td>91 ms</td><td>857 rps</td><td class="bad">37,068 ms</td><td class="bad">fast, fails HA</td></tr>
+<tr><td>Co-located single redis</td><td>Same-VM, 1 node</td><td>50 ms</td><td>103 ms</td><td>847 rps</td><td class="good">268 ms</td><td class="good">resilient</td></tr>
+<tr><td>Co-located 6-node cluster</td><td>Same-VM, 3+3 shards</td><td>60 ms</td><td>63 ms</td><td>856 rps</td><td class="good">53 ms</td><td class="good">best</td></tr>
+<tr class="hl"><td>AWS ElastiCache</td><td>Managed OSS, direct-to-shard</td><td>181 ms</td><td>rig-capped*</td><td>rig-capped*</td><td class="good">522 ms</td><td class="good">viable, +latency</td></tr>
+<tr><td>Azure Managed Redis</td><td>Managed, single proxy endpoint</td><td class="bad">4,940 ms</td><td class="bad">18,609 ms</td><td class="bad">601 rps</td><td>—</td><td class="bad">avoid (proxy)</td></tr>
+</table>
+<p class="axis">* AWS ElastiCache 250-ups figures are rig-capped on the test EKS cluster (see §4) and are omitted from the verdict; its 80/160-ups numbers are clean.</p>
+</section>
+
+<section>
+<h2>2 · Full latency distributions</h2>
+<p>Every backend, every load point — not just the worst case. Captured from Gatling's Global Information block (50–60s steady-state per point, 3 KC pods). p50/mean/p95/p99/max in milliseconds, rps = achieved throughput.</p>
+<h3>AWS EKS rig</h3>
+<table class="dist"><tr><th>Backend</th><th>ups</th><th>rps</th><th>p50</th><th>mean</th><th>p95</th><th>p99</th><th>max</th></tr><tr><td rowspan="3" class="be">ElastiCache (AWS managed, 3-shard OSS cluster)</td><td>80</td><td>274</td><td>53</td><td>67</td><td>156</td><td><b>181</b></td><td>245</td></tr><tr><td>160</td><td>548</td><td>58</td><td>89</td><td>207</td><td><b>588</b></td><td>943</td></tr><tr class="knee"><td>250</td><td>640</td><td>124</td><td>2411</td><td>11749</td><td><b>12,391</b></td><td>13,289</td></tr><tr><td rowspan="3" class="be">Co-located single redis (AWS, shared infra node)</td><td>80</td><td>273</td><td>50</td><td>70</td><td>207</td><td><b>241</b></td><td>357</td></tr><tr><td>160</td><td>548</td><td>53</td><td>203</td><td>789</td><td><b>1,042</b></td><td>1,352</td></tr><tr class="knee"><td>250</td><td>601</td><td>68</td><td>2914</td><td>13810</td><td><b>15,536</b></td><td>16,784</td></tr><tr><td rowspan="3" class="be">Upstream Infinispan (AWS, in-process)</td><td>80</td><td>273</td><td>5</td><td>20</td><td>77</td><td><b>84</b></td><td>144</td></tr><tr><td>160</td><td>548</td><td>5</td><td>21</td><td>79</td><td><b>125</b></td><td>276</td></tr><tr class="knee"><td>250</td><td>760</td><td>662</td><td>1158</td><td>3962</td><td><b>4,626</b></td><td>5,383</td></tr></table>
+<h3>Azure rig</h3>
+<table class="dist"><tr><th>Backend</th><th>ups</th><th>rps</th><th>p50</th><th>mean</th><th>p95</th><th>p99</th><th>max</th></tr><tr><td rowspan="3" class="be">Co-located single redis (Azure, dedicated E8 nodes)</td><td>80</td><td>271</td><td>20</td><td>22</td><td>44</td><td><b>50</b></td><td>192</td></tr><tr><td>160</td><td>542</td><td>20</td><td>24</td><td>47</td><td><b>56</b></td><td>200</td></tr><tr><td>250</td><td>847</td><td>22</td><td>28</td><td>60</td><td><b>103</b></td><td>216</td></tr><tr><td rowspan="3" class="be">Upstream Infinispan (Azure, in-process)</td><td>80</td><td>272</td><td>5</td><td>12</td><td>41</td><td><b>49</b></td><td>489</td></tr><tr><td>160</td><td>544</td><td>4</td><td>11</td><td>42</td><td><b>47</b></td><td>81</td></tr><tr><td>250</td><td>851</td><td>4</td><td>14</td><td>53</td><td><b>91</b></td><td>268</td></tr></table>
+<p class="axis">Rows shaded red are past the rig's saturation knee — see §4. Azure 6-node cluster (p99 60/–/63 ms) and AMR (p99 4,940/–/18,609 ms) were captured as p99-only summary points, not full distributions.</p>
+</section>
+
+<section>
+<h2>3 · Latency vs load</h2>
+<p>At 80 and 160 logins/sec every backend scales linearly to full throughput (273→547 rps) — the difference is purely latency. The shapes diverge as load climbs.</p>
+<svg viewBox="0 0 860 420" role="img" aria-label="p99 latency vs load — AWS EKS rig (250 ups is rig-capped)" class="chart">
+<text x="325.0" y="28" class="ctitle" text-anchor="middle">p99 latency vs load — AWS EKS rig (250 ups is rig-capped)</text>
+<line x1="70" y1="360" x2="650" y2="360" class="grid"/>
+<text x="60" y="364" class="axis" text-anchor="end">1</text>
+<line x1="70" y1="288" x2="650" y2="288" class="grid"/>
+<text x="60" y="292" class="axis" text-anchor="end">10</text>
+<line x1="70" y1="216" x2="650" y2="216" class="grid"/>
+<text x="60" y="220" class="axis" text-anchor="end">100</text>
+<line x1="70" y1="144" x2="650" y2="144" class="grid"/>
+<text x="60" y="148" class="axis" text-anchor="end">1,000</text>
+<line x1="70" y1="72" x2="650" y2="72" class="grid"/>
+<text x="60" y="76" class="axis" text-anchor="end">10,000</text>
+<text x="70" y="384" class="axis" text-anchor="middle">80 ups</text>
+<text x="360" y="384" class="axis" text-anchor="middle">160 ups</text>
+<text x="650" y="384" class="axis" text-anchor="middle">250 ups</text>
+<text x="18" y="210.0" class="axis" text-anchor="middle" transform="rotate(-90 18 210.0)">p99 latency (ms, log)</text>
+<polyline points="70.0,197.3 360.0,160.4 650.0,65.0" fill="none" stroke="#3b82f6" stroke-width="2.5"/>
+<circle cx="70.0" cy="197.3" r="4" fill="#3b82f6"/>
+<circle cx="360.0" cy="160.4" r="4" fill="#3b82f6"/>
+<circle cx="650.0" cy="65.0" r="4" fill="#3b82f6"/>
+<rect x="660" y="55" width="14" height="4" fill="#3b82f6"/>
+<text x="680" y="60" class="leg">ElastiCache (managed)</text>
+<polyline points="70.0,188.3 360.0,142.5 650.0,57.9" fill="none" stroke="#8b5cf6" stroke-width="2.5"/>
+<circle cx="70.0" cy="188.3" r="4" fill="#8b5cf6"/>
+<circle cx="360.0" cy="142.5" r="4" fill="#8b5cf6"/>
+<circle cx="650.0" cy="57.9" r="4" fill="#8b5cf6"/>
+<rect x="660" y="77" width="14" height="4" fill="#8b5cf6"/>
+<text x="680" y="82" class="leg">Co-located single redis</text>
+<polyline points="70.0,221.3 360.0,208.9 650.0,95.8" fill="none" stroke="#64748b" stroke-width="2.5"/>
+<circle cx="70.0" cy="221.3" r="4" fill="#64748b"/>
+<circle cx="360.0" cy="208.9" r="4" fill="#64748b"/>
+<circle cx="650.0" cy="95.8" r="4" fill="#64748b"/>
+<rect x="660" y="99" width="14" height="4" fill="#64748b"/>
+<text x="680" y="104" class="leg">Infinispan (in-process)</text>
+</svg>
+<svg viewBox="0 0 860 420" role="img" aria-label="p99 latency vs load — Azure rig (separate nodes, holds 250 ups)" class="chart">
+<text x="325.0" y="28" class="ctitle" text-anchor="middle">p99 latency vs load — Azure rig (separate nodes, holds 250 ups)</text>
+<line x1="70" y1="360" x2="650" y2="360" class="grid"/>
+<text x="60" y="364" class="axis" text-anchor="end">1</text>
+<line x1="70" y1="294" x2="650" y2="294" class="grid"/>
+<text x="60" y="298" class="axis" text-anchor="end">10</text>
+<line x1="70" y1="228" x2="650" y2="228" class="grid"/>
+<text x="60" y="232" class="axis" text-anchor="end">100</text>
+<line x1="70" y1="162" x2="650" y2="162" class="grid"/>
+<text x="60" y="166" class="axis" text-anchor="end">1,000</text>
+<line x1="70" y1="96" x2="650" y2="96" class="grid"/>
+<text x="60" y="100" class="axis" text-anchor="end">10,000</text>
+<text x="70" y="384" class="axis" text-anchor="middle">80 ups</text>
+<text x="360" y="384" class="axis" text-anchor="middle">160 ups</text>
+<text x="650" y="384" class="axis" text-anchor="middle">250 ups</text>
+<text x="18" y="210.0" class="axis" text-anchor="middle" transform="rotate(-90 18 210.0)">p99 latency (ms, log)</text>
+<polyline points="70.0,247.9 360.0,244.7 650.0,227.2" fill="none" stroke="#22c55e" stroke-width="2.5"/>
+<circle cx="70.0" cy="247.9" r="4" fill="#22c55e"/>
+<circle cx="360.0" cy="244.7" r="4" fill="#22c55e"/>
+<circle cx="650.0" cy="227.2" r="4" fill="#22c55e"/>
+<rect x="660" y="55" width="14" height="4" fill="#22c55e"/>
+<text x="680" y="60" class="leg">Co-located single redis</text>
+<polyline points="70.0,242.7 650.0,241.3" fill="none" stroke="#10b981" stroke-width="2.5"/>
+<circle cx="70.0" cy="242.7" r="4" fill="#10b981"/>
+<circle cx="650.0" cy="241.3" r="4" fill="#10b981"/>
+<rect x="660" y="77" width="14" height="4" fill="#10b981"/>
+<text x="680" y="82" class="leg">Co-located 6-node cluster</text>
+<polyline points="70.0,248.5 360.0,249.7 650.0,230.8" fill="none" stroke="#64748b" stroke-width="2.5"/>
+<circle cx="70.0" cy="248.5" r="4" fill="#64748b"/>
+<circle cx="360.0" cy="249.7" r="4" fill="#64748b"/>
+<circle cx="650.0" cy="230.8" r="4" fill="#64748b"/>
+<rect x="660" y="99" width="14" height="4" fill="#64748b"/>
+<text x="680" y="104" class="leg">Infinispan (in-process)</text>
+<polyline points="70.0,116.3 650.0,78.3" fill="none" stroke="#ef4444" stroke-width="2.5"/>
+<circle cx="70.0" cy="116.3" r="4" fill="#ef4444"/>
+<circle cx="650.0" cy="78.3" r="4" fill="#ef4444"/>
+<rect x="660" y="121" width="14" height="4" fill="#ef4444"/>
+<text x="680" y="126" class="leg">Azure Managed Redis (proxy)</text>
+</svg>
+<p class="lead">On the Azure rig (postgres and Redis on separate dedicated nodes) both Locke and Infinispan hold 250 ups at ~850 rps and p99 ≈ 100 ms. On the AWS rig they knee at 250 — which is the rig, not the backend (next section).</p>
+</section>
+
+<section>
+<h2>4 · Apples-to-apples honesty</h2>
+<div class="note"><b>What's clean and what isn't.</b> The two rigs are not identical, so we only draw backend conclusions where the rig isn't the bottleneck.</div>
+<ul>
+<li><b>The AWS 250-ups cliff is a rig artifact, not a backend property.</b> On the AWS EKS cluster, postgres shares one node with the loadgen/infra tier and its write-ahead log sits on EBS gp3. At 250 ups (~850 session-persist writes/sec) <em>every</em> backend knees — including in-process Infinispan (rps 760, p99 4.6&nbsp;s), which touches no Redis at all. On the Azure rig, with postgres on its own dedicated node, the identical software holds 250 ups at ~850 rps / 91&nbsp;ms. Same code, different storage IOPS. We therefore compare backends at <b>80 and 160 ups</b>, below that knee.</li>
+<li><b>Topologies differ in size.</b> "Co-located single redis" is one Redis thread; ElastiCache here is a 3-shard cluster; the Azure cluster is 6 nodes. A bigger deployment naturally absorbs more — that's why the 3-shard ElastiCache beats the single co-located Redis at 160 ups. It's a "what you'd actually deploy" comparison, not a same-size topology shoot-out.</li>
+<li><b>Cross-cloud, and not the same CPU.</b> ElastiCache ran on AWS; AMR and the Azure co-located reference ran on Azure. Both clouds used x86-64 with matched vCPU counts (16 KC / 8 aux) and the identical amd64 images, but <em>different silicon</em>: Azure E-series <code>as_v7</code> is <b>AMD EPYC</b>, AWS <code>c6i</code> is <b>Intel Xeon (Ice Lake)</b>. So cross-cloud absolute latencies carry three confounds at once — CPU vendor, storage (Azure premium SSD vs AWS EBS gp3), and node placement (separate vs shared infra node). The managed-proxy-vs-direct-shard contrast is architectural and dwarfs these; the clean same-CPU backend comparison is the AWS-only set at 80/160 ups.</li>
+<li><b>Workload.</b> keycloak-benchmark Gatling AuthorizationCode (full login → code → token). Steady-state authentication only — the harness does <em>not</em> continuously create users while authenticating. 3 KC pods, <code>start --optimized</code>, Keycloak 26.6.x.</li>
+</ul>
+</section>
+
+<section>
+<h2>5 · Resilience — the reason Locke exists</h2>
+<p>Throughput parity and a few ms of latency are the price; resilience is what you buy. A single KC pod is killed mid-run at T+43s.</p>
+<svg viewBox="0 0 860 420" role="img" aria-label="Failover: p99 over time through a KC pod kill (Azure, 80 ups)" class="chart">
+<text x="330.0" y="28" class="ctitle" text-anchor="middle">Failover: p99 over time through a KC pod kill (Azure, 80 ups)</text>
+<line x1="70" y1="296" x2="660" y2="296" class="grid"/>
+<text x="60" y="300" class="axis" text-anchor="end">100</text>
+<line x1="70" y1="205" x2="660" y2="205" class="grid"/>
+<text x="60" y="209" class="axis" text-anchor="end">1,000</text>
+<line x1="70" y1="114" x2="660" y2="114" class="grid"/>
+<text x="60" y="118" class="axis" text-anchor="end">10,000</text>
+<line x1="70" y1="59" x2="660" y2="59" class="grid"/>
+<text x="60" y="63" class="axis" text-anchor="end">40,000</text>
+<line x1="229" y1="50" x2="229" y2="360" class="kill"/>
+<text x="234" y="64" class="killt">pod killed</text>
+<polyline points="70.0,217.2 73.7,238.3 77.4,280.7 81.1,284.3 84.8,291.4 88.4,287.1 92.1,284.9 95.8,295.4 99.5,282.9 103.2,287.4 106.9,301.3 110.6,300.0 114.2,304.1 117.9,305.6 121.6,305.1 125.3,301.3 129.0,306.6 132.7,300.8 136.4,306.6 140.1,306.1 143.8,275.0 147.4,306.1 151.1,267.6 154.8,305.1 158.5,303.6 162.2,309.8 165.9,307.1 169.6,251.5 173.2,224.3 176.9,233.2 180.6,252.0 184.3,305.6 188.0,310.9 191.7,307.6 195.4,306.1 199.1,303.6 202.8,302.7 206.4,302.2 210.1,305.6 213.8,302.7 217.5,307.1 221.2,307.1 224.9,306.1 228.6,299.1 232.2,293.2 235.9,304.1 239.6,304.6 243.3,308.2 247.0,303.6 250.7,305.1 254.4,296.6 258.1,309.2 261.8,302.2 265.4,304.6 269.1,300.8 272.8,301.3 276.5,304.1 280.2,305.1 283.9,308.2 287.6,308.7 291.2,307.6 294.9,305.6 298.6,305.1 302.3,306.1 306.0,309.2 309.7,198.1 313.4,195.3 317.1,204.1 320.8,220.7 324.4,252.8 328.1,304.6 331.8,307.1 335.5,306.1 339.2,307.6 342.9,305.1 346.6,310.4 350.2,310.9 353.9,310.4 357.6,305.6 361.3,310.4 365.0,306.6 368.7,306.6 372.4,307.1 376.1,307.6 379.8,310.4 383.4,308.7 387.1,309.2 390.8,310.9 394.5,309.2 398.2,307.6 401.9,305.6 405.6,308.2 409.2,304.1 412.9,303.6 416.6,304.6 420.3,304.1 424.0,309.2 427.7,307.6 431.4,309.2 435.1,309.2 438.8,309.2 442.4,306.1 446.1,301.3 449.8,304.6 453.5,307.6 457.2,307.1 460.9,306.6 464.6,308.7 468.2,303.6 471.9,311.5 475.6,309.2 479.3,308.7 483.0,310.9 486.7,310.4 490.4,310.9 494.1,299.5 497.8,307.6 501.4,306.6 505.1,305.1 508.8,309.2 512.5,309.8 516.2,307.1 519.9,309.2 523.6,308.7 527.2,306.6 530.9,308.7 534.6,308.7 538.3,308.2 542.0,309.8 545.7,303.1 549.4,308.2 553.1,307.6 556.8,301.7 560.4,307.1 564.1,309.2 567.8,309.8 571.5,309.8 575.2,310.4 578.9,308.2 582.6,305.6 586.2,307.6 589.9,309.8 593.6,308.7 597.3,305.1 601.0,308.7 604.7,309.8 608.4,310.9 612.1,310.4 615.8,308.7 619.4,308.7 623.1,310.9 626.8,305.6 630.5,305.1 634.2,309.8 637.9,308.7 641.6,310.4 645.2,307.1 648.9,304.6 652.6,309.8 656.3,309.8 660.0,307.1" fill="none" stroke="#22c55e" stroke-width="2"/>
+<polyline points="70.0,331.6 73.7,332.5 77.4,333.5 81.1,333.5 84.8,330.6 88.4,332.5 92.1,333.5 95.8,330.6 99.5,331.6 103.2,328.8 106.9,332.5 110.6,327.0 114.2,332.5 117.9,327.0 121.6,333.5 125.3,327.9 129.0,330.6 132.7,332.5 136.4,330.6 140.1,333.5 143.8,332.5 147.4,332.5 151.1,332.5 154.8,327.9 158.5,329.7 162.2,327.0 165.9,333.5 169.6,328.8 173.2,332.5 176.9,332.5 180.6,332.5 184.3,331.6 188.0,330.6 191.7,324.5 195.4,333.5 199.1,332.5 202.8,332.5 206.4,329.7 210.1,331.6 213.8,326.1 217.5,333.5 221.2,330.6 224.9,328.8 228.6,97.6 232.2,97.6 235.9,72.0 239.6,57.1 243.3,57.2 247.0,57.7 250.7,57.4 254.4,58.0 258.1,59.0 261.8,60.0 265.4,61.0 269.1,62.1 272.8,63.2 276.5,64.3 280.2,65.4 283.9,66.6 287.6,67.6 291.2,68.4 294.9,70.3 298.6,71.5 302.3,72.9 306.0,74.2 309.7,75.7 313.4,77.2 317.1,78.8 320.8,80.6 324.4,82.2 328.1,84.0 331.8,85.9 335.5,87.9 339.2,90.0 342.9,91.4 346.6,93.1 350.2,96.6 353.9,99.2 357.6,102.0 361.3,105.0 365.0,108.3 368.7,111.7 372.4,115.6 376.1,120.2 379.8,124.8 383.4,113.8 387.1,137.0 390.8,144.7 394.5,153.8 398.2,161.7 401.9,144.9 405.6,106.6 409.2,108.3 412.9,111.2 416.6,114.4 420.3,117.1 424.0,121.9 427.7,126.3 431.4,131.2 435.1,137.1 438.8,143.6 442.4,152.0 446.1,162.1 449.8,170.3 453.5,161.3 457.2,157.8 460.9,172.4 464.6,191.1 468.2,205.8 471.9,232.1 475.6,331.6 479.3,331.6 483.0,331.6 486.7,332.5 490.4,332.5 494.1,333.5 497.8,332.5 501.4,326.1 505.1,330.6 508.8,332.5 512.5,332.5 516.2,322.9 519.9,331.6 523.6,328.8 527.2,331.6 530.9,328.8 534.6,331.6 538.3,332.5 542.0,330.6 545.7,327.0 549.4,327.0 553.1,331.6 556.8,332.5 560.4,329.7 564.1,329.7 567.8,331.6 571.5,333.5 575.2,326.1 578.9,328.8 582.6,330.6 586.2,331.6 589.9,333.5 593.6,332.5 597.3,331.6 601.0,330.6 604.7,333.5 608.4,332.5 612.1,332.5 615.8,330.6 619.4,331.6 623.1,330.6 626.8,330.6 630.5,329.7 634.2,333.5 637.9,327.9 641.6,333.5 645.2,329.7 648.9,332.5 652.6,328.8 656.3,330.6 660.0,331.6" fill="none" stroke="#ef4444" stroke-width="2"/>
+<rect x="670" y="55" width="14" height="4" fill="#22c55e"/>
+<text x="690" y="60" class="leg">Locke · co-located redis</text>
+<rect x="670" y="77" width="14" height="4" fill="#ef4444"/>
+<text x="690" y="82" class="leg">Upstream Infinispan</text>
+<text x="330.0" y="408" class="axis" text-anchor="middle">seconds (160s run, kill at T+43s)</text>
+<text x="18" y="210.0" class="axis" text-anchor="middle" transform="rotate(-90 18 210.0)">p99 latency (ms, log)</text>
+</svg>
+<p class="lead">Infinispan's in-process cache must rebalance its JGroups cluster on membership change: p99 jumps to <b>37&nbsp;seconds</b> and stays elevated for ~65s before recovering — a 0.68% error window. Locke holds p99 at <b>268&nbsp;ms</b> (Azure co-located) / <b>522&nbsp;ms</b> (AWS ElastiCache) with effectively zero errors: cache state lives in Redis, so losing a stateless KC pod is a non-event. That's a ~140× smaller failover impact.</p>
+</section>
+
+<section>
+<h2>6 · Recommendations</h2>
+<ul>
+<li><b>Best latency + resilience:</b> co-located Redis (a small cluster on the same nodes/VPC). Sub-100&nbsp;ms p99 to 250 ups and sub-100&nbsp;ms failover.</li>
+<li><b>Already run managed Redis?</b> AWS ElastiCache (or any OSS cluster-mode service you talk to directly) is viable. Budget the network-hop latency (p50 ~5→55&nbsp;ms vs in-process) and size the tier for your peak — and keep Redis in the same VPC/AZ as Keycloak.</li>
+<li><b>Avoid single-proxy-endpoint managed Redis</b> (Azure Managed Redis in its OSS/Enterprise-cluster working mode) for this workload — the proxy funnel amplifies multi-round-trip logins into seconds of p99.</li>
+<li><b>Don't keep Infinispan for HA.</b> It's the latency floor but a 37-second failover stall is disqualifying for zero-downtime operation — which is the whole point of Locke.</li>
+</ul>
+</section>
+
+</div>
+<hr class="foot-rule">
+<footer><div class="wrap">Locke · Skycloak · Apache-2.0 · keycloak-benchmark Gatling AuthorizationCode · Azure (E16/E8) &amp; AWS EKS (c6i.4xlarge/c6i.2xlarge) · figures are from the runs in <code>benchmark/k8s/results/</code>.</div></footer>
+</body></html>

@@ -1,0 +1,93 @@
+# Locke: one-off backfill to republish already-released tags as multi-arch.
+# The early releases were pushed amd64-only; this rebuilds each tag for both
+# linux/amd64 + linux/arm64 (from the dist tarball attached to its GitHub release)
+# and pushes a manifest list to GHCR + Quay + Docker Hub in a single buildx run.
+# Future releases are multi-arch by default via locke-release.yml; this is for the
+# back catalogue. Manually dispatched.
+name: locke-backfill-arch
+
+on:
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: "Tags to rebuild as multi-arch and republish"
+        required: true
+        default: "26.3.5-2 26.3.5-3 26.6.1-1 26.6.1-2 26.6.2-1 26.6.2-2"
+      latest_tag:
+        description: "Tag that 'latest' should point at (multi-arch)"
+        required: true
+        default: "26.6.2-2"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  backfill:
+    if: github.repository == 'sky-cloak/locke'
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ghcr.io/sky-cloak/locke
+      QUAY_IMAGE: quay.io/skycloak/locke
+      DOCKERHUB_IMAGE: docker.io/skycloak/locke
+      QUAY_USER: ${{ secrets.QUAY_USERNAME }}
+      QUAY_TOKEN: ${{ secrets.QUAY_TOKEN }}
+      DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAGS: ${{ inputs.tags }}
+      LATEST_TAG: ${{ inputs.latest_tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU (cross-arch emulation for arm64 build)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Registry logins
+        run: |
+          # GHCR is the build target (buildx --push reads ~/.docker/config.json) and is required.
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          # Quay + Docker Hub are mirror targets via skopeo. A failed login on a mirror
+          # registry (e.g. a rotated/expired token) must NOT abort the whole backfill:
+          # GHCR plus any registry that did authenticate should still get arm64. We
+          # record success in $GITHUB_ENV and gate the mirror steps on those flags.
+          sudo apt-get update && sudo apt-get install -y skopeo
+          if [ -n "$QUAY_TOKEN" ] && skopeo login quay.io -u "$QUAY_USER" --password "$QUAY_TOKEN"; then
+            echo "QUAY_OK=1" >> "$GITHUB_ENV"
+          else
+            echo "Quay login unavailable; skipping Quay mirror."
+          fi
+          if [ -n "$DOCKERHUB_TOKEN" ] && skopeo login docker.io -u "$DOCKERHUB_USER" --password "$DOCKERHUB_TOKEN"; then
+            echo "DOCKERHUB_OK=1" >> "$GITHUB_ENV"
+          else
+            echo "Docker Hub login unavailable; skipping Docker Hub mirror."
+          fi
+
+      - name: Rebuild each tag multi-arch on GHCR, then mirror to Quay + Docker Hub
+        run: |
+          set -euo pipefail
+          for TAG in $TAGS; do
+            echo "::group::$TAG"
+            rm -f quarkus/container/keycloak-*.tar.gz
+            gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p 'keycloak-*.tar.gz' -D quarkus/container --clobber
+            DIST_FILE="$(basename "$(ls quarkus/container/keycloak-*.tar.gz)")"
+            docker buildx build quarkus/container \
+              --platform linux/amd64,linux/arm64 \
+              --build-arg KEYCLOAK_DIST="$DIST_FILE" \
+              -t "$IMAGE:$TAG" \
+              --provenance=false \
+              --push
+            if [ -n "${QUAY_OK:-}" ];      then skopeo copy --all "docker://$IMAGE:$TAG" "docker://$QUAY_IMAGE:$TAG";      fi
+            if [ -n "${DOCKERHUB_OK:-}" ]; then skopeo copy --all "docker://$IMAGE:$TAG" "docker://$DOCKERHUB_IMAGE:$TAG"; fi
+            echo "::endgroup::"
+          done
+
+      - name: Point latest at the multi-arch manifest list
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create -t "$IMAGE:latest" "$IMAGE:$LATEST_TAG"
+          if [ -n "${QUAY_OK:-}" ];      then skopeo copy --all "docker://$IMAGE:latest" "docker://$QUAY_IMAGE:latest";      fi
+          if [ -n "${DOCKERHUB_OK:-}" ]; then skopeo copy --all "docker://$IMAGE:latest" "docker://$DOCKERHUB_IMAGE:latest"; fi

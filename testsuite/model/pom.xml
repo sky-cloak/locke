@@ -95,6 +95,11 @@
             <artifactId>keycloak-model-infinispan</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.keycloak</groupId>
+            <artifactId>keycloak-model-redis</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>org.keycloak.testsuite</groupId>
             <artifactId>integration-arquillian-testsuite-providers</artifactId>
             <version>${project.version}</version>
@@ -217,6 +222,45 @@
             <id>jpa+infinispan</id>
             <properties>
                 <keycloak.model.parameters>Infinispan,Jpa</keycloak.model.parameters>
+            </properties>
+        </profile>
+
+        <!-- Locke: behavioral-parity gate (docs/adr/0004) — upstream's model conformance
+             tests run against the Redis cache backend. Needs a reachable Redis
+             (-Dkeycloak.connectionsRedis.url, default redis://localhost:6379). -->
+        <profile>
+            <id>jpa+redis</id>
+            <properties>
+                <keycloak.model.parameters>Redis,Jpa</keycloak.model.parameters>
+                <!--
+                  Harness-artifact exclusions (jpa+redis triage): these tests reach into
+                  Infinispan internals or rely on test-only time plumbing a Redis backend
+                  cannot honor. Everything else in these classes runs. Surefire prohibits
+                  method filters in includes/excludes, so the negated patterns go through
+                  the "test" user property instead; a -Dtest=... on the CLI still overrides.
+
+                  - AuthenticationSessionTest#testRemoveExpiredAuthSessions: auth-session
+                    expiration is enforced by Redis TTLs on the Redis server clock;
+                    Time.setOffset only shifts the JVM clock.
+                  - AuthenticationSessionTest#testRemoveAfterCreation: reads Infinispan
+                    cache operation counters via InfinispanConnectionProvider.
+                  - OfflineSessionPersistenceTest#testOfflineSessionLoadingAfterCacheRemoval:
+                    hardcodes the set of known UserSessionProvider implementations.
+                  - UserSessionExpirationTest#testExpirationEvents: listens on the embedded
+                    Infinispan session cache for expiration events.
+                  - UserSessionInitializerTest#testUserSessionPropagationBetweenSites:
+                    cross-site propagation through embedded Infinispan caches.
+                  - UserSessionPersisterProviderTest#testClientTimestampUpdate, #testUserRemoved,
+                    #testUserSessionRememberMeMigration: read Infinispan caches directly;
+                    #testMigrateSession: casts to PersistentUserSessionProvider;
+                    #testExpirationDistribution, #testExpirationTaskFrequency: Infinispan
+                    task-distribution mechanics; Locke sweeps via its own redis-leased timer.
+                  - UserSessionProviderOfflineModelTest#testOfflineClientSessionLoading,
+                    #testLoadingOfflineClientSessionWhenCreatedBeforeSessionTime,
+                    #testOfflineSessionLazyLoadingPropagationBetweenNodes: seed/inspect
+                    Infinispan offline-session caches directly.
+                -->
+                <test>!org.keycloak.testsuite.model.session.AuthenticationSessionTest#testRemoveExpiredAuthSessions+testRemoveAfterCreation, !org.keycloak.testsuite.model.session.OfflineSessionPersistenceTest#testOfflineSessionLoadingAfterCacheRemoval, !org.keycloak.testsuite.model.session.UserSessionExpirationTest#testExpirationEvents, !org.keycloak.testsuite.model.session.UserSessionInitializerTest#testUserSessionPropagationBetweenSites, !org.keycloak.testsuite.model.session.UserSessionPersisterProviderTest#testClientTimestampUpdate+testExpirationDistribution+testExpirationTaskFrequency+testMigrateSession+testUserRemoved+testUserSessionRememberMeMigration, !org.keycloak.testsuite.model.session.UserSessionProviderOfflineModelTest#testOfflineClientSessionLoading+testLoadingOfflineClientSessionWhenCreatedBeforeSessionTime+testOfflineSessionLazyLoadingPropagationBetweenNodes</test>
             </properties>
         </profile>
 

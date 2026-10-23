@@ -1,3 +1,33 @@
+# Contributing to Locke
+
+Locke is a distribution of Keycloak with a Redis cache backend. Contributions are
+welcome. A few distribution-specific notes before the general Keycloak guidelines
+below:
+
+- **Where your change belongs.**
+  - Redis cache backend, benchmarks, and Locke tooling live in `model/redis/`,
+    `benchmark/`, and `docs/redis-*`. Send those changes here.
+  - Bug fixes or features in core Keycloak should go **upstream** to
+    [keycloak/keycloak](https://github.com/keycloak/keycloak) so the whole
+    community benefits; we rebase them in. If a fix is urgent for Locke, open it
+    here and upstream it in parallel.
+- **Keep the upstream patch surface small.** Locke rebases onto upstream Keycloak
+  `main` daily. Changes that touch upstream files raise rebase cost, so prefer
+  keeping new code inside `model/redis/`. If you must touch an upstream file,
+  explain why in the PR.
+- **DCO sign-off is required** (`git commit --signoff`), same as upstream; see
+  the sign-off section below.
+- **Tests are required for behavior changes**, and PRs are expected to be rebased
+  on `main` (`git rebase`, not `git pull`). CI runs the test suite and a
+  benchmark on your PR branch.
+- **Bench-sensitive changes**: the PR pipeline comments throughput numbers vs
+  `main`. A regression below parity threshold will be flagged.
+
+Everything below is the upstream Keycloak contribution guide and applies to Locke
+as well.
+
+---
+
 # Keycloak Community
 
 Keycloak is an Open Source Identity and Access Management solution for modern Applications and Services.

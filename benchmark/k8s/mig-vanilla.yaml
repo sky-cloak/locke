@@ -1,0 +1,50 @@
+# Same-version migration test — START state: vanilla Keycloak 26.6.1 (Infinispan/JGroups).
+# StatefulSet name kc-mig is shared with mig-locke.yaml; applying that rolls image+env to Locke.
+apiVersion: v1
+kind: Service
+metadata: { name: kc-mig-headless, namespace: locke-bench }
+spec: { clusterIP: None, selector: { app: kc-mig }, ports: [ { name: http, port: 8080 }, { name: jgroups, port: 7800 } ] }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: kc-mig, namespace: locke-bench }
+spec: { selector: { app: kc-mig }, ports: [ { name: http, port: 8080, targetPort: 8080 } ] }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: kc-mig, namespace: locke-bench }
+spec:
+  serviceName: kc-mig-headless
+  replicas: 3
+  selector: { matchLabels: { app: kc-mig } }
+  template:
+    metadata: { labels: { app: kc-mig } }
+    spec:
+      nodeSelector: { bench-role: kc }
+      imagePullSecrets: [ { name: ghcr-pull } ]
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector: { matchLabels: { app: kc-mig } }
+      containers:
+        - name: keycloak
+          image: ghcr.io/sky-cloak/locke-bench-vanilla:26.6.1
+          env:
+            - { name: KC_DB, value: postgres }
+            - { name: KC_DB_URL, value: "jdbc:postgresql://postgres:5432/keycloak" }
+            - { name: KC_DB_USERNAME, value: keycloak }
+            - { name: KC_DB_PASSWORD, value: keycloak }
+            - { name: KC_DB_POOL_MAX_SIZE, value: "50" }
+            - { name: KC_CACHE_STACK, value: jdbc-ping }
+            - { name: KC_HOSTNAME_STRICT, value: "false" }
+            - { name: KC_HTTP_ENABLED, value: "true" }
+            - { name: KC_PROXY_HEADERS, value: xforwarded }
+            - { name: KC_BOOTSTRAP_ADMIN_USERNAME, value: admin }
+            - { name: KC_BOOTSTRAP_ADMIN_PASSWORD, value: admin }
+            - { name: JAVA_OPTS_APPEND, value: "-Xms2g -Xmx4g -XX:+UseG1GC" }
+          ports: [ { name: http, containerPort: 8080 }, { name: jgroups, containerPort: 7800 }, { name: mgmt, containerPort: 9000 } ]
+          resources:
+            requests: { cpu: "6", memory: 6Gi }
+            limits: { cpu: "6", memory: 6Gi }
+          readinessProbe: { httpGet: { path: /health/ready, port: 9000 }, initialDelaySeconds: 20, periodSeconds: 5, failureThreshold: 60 }

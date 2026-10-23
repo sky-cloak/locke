@@ -1,0 +1,5 @@
+FROM quay.io/keycloak/keycloak:26.3.5 AS build
+RUN /opt/keycloak/bin/kc.sh build --db=postgres --health-enabled=true --metrics-enabled=true
+FROM quay.io/keycloak/keycloak:26.3.5
+COPY --from=build /opt/keycloak/ /opt/keycloak/
+ENTRYPOINT ["/opt/keycloak/bin/kc.sh","start","--optimized"]

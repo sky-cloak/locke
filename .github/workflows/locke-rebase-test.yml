@@ -1,0 +1,108 @@
+# Locke: daily check that the Redis patch still applies to the latest Keycloak release.
+# Rebases onto the newest keycloak/keycloak release tag (not bleeding-edge main). Because
+# our branch is version-pinned, a rebase onto a different release always conflicts on
+# <version> strings across poms; that is noise. So we auto-resolve every conflict EXCEPT
+# those in the Redis patch source (model/redis + the few patched files), and only open a
+# tracking issue when the patch source itself conflicts. Full apply + version-bump + build
+# verification is the job of `locke-bump` (scripts/rebase-onto.sh) when actually cutting a release.
+name: locke-rebase-test
+
+on:
+  schedule:
+    - cron: '0 6 * * *'   # 06:00 UTC daily
+  workflow_dispatch: {}
+
+# Only meaningful on the canonical repo; skip on community forks.
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  rebase:
+    if: github.repository == 'sky-cloak/locke'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Locke main (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure identity
+        run: |
+          git config user.name  "locke-ci"
+          git config user.email "ci@skycloak.io"
+
+      - name: Add upstream
+        run: |
+          git remote add upstream https://github.com/keycloak/keycloak.git
+
+      - name: Attempt rebase onto latest upstream release
+        id: rebase
+        env:
+          # Only conflicts in the Redis *patch source* are a real signal. Everything
+          # else (README, version-bumped poms, unrelated upstream churn) is auto-resolved
+          # by keeping our side, because rebasing a version-pinned branch onto a different
+          # release tag always conflicts on <version> strings, which is noise, not breakage.
+          CARE_RE: '(^model/redis/)|(/CachingOptions\.java$)|(/CachingPropertyMappers\.java$)|(/KeycloakProcessor\.java$)|(^model/infinispan/.*ProviderFactory\.java$)'
+        run: |
+          set +e
+          # Latest upstream Keycloak *release* tag (plain X.Y.Z, no suffix). We track
+          # releases, not bleeding-edge main, so this only fires on a real new release.
+          LATEST="$(git ls-remote --tags --refs upstream | awk -F/ '{print $NF}' \
+            | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
+          echo "Latest upstream Keycloak release: ${LATEST}"
+          echo "target=${LATEST}" >> "$GITHUB_OUTPUT"
+          git fetch upstream "refs/tags/${LATEST}:refs/tags/${LATEST}" 2>/dev/null
+          git rebase "${LATEST}"
+          if [ $? -eq 0 ]; then echo "result=clean" >> "$GITHUB_OUTPUT"; exit 0; fi
+          # Replay the patch; auto-resolve any non-patch-source conflict (keep ours) and
+          # only flag a conflict that lands in the Redis patch source itself.
+          for _ in $(seq 1 100); do
+            CONFLICTS="$(git diff --name-only --diff-filter=U)"
+            [ -z "$CONFLICTS" ] && break
+            REAL="$(echo "$CONFLICTS" | grep -E "$CARE_RE")"
+            if [ -n "$REAL" ]; then
+              echo "result=conflict" >> "$GITHUB_OUTPUT"
+              { echo "Rebasing the Locke Redis patch onto Keycloak ${LATEST} conflicts in the patch source:"; echo "$REAL"; } > /tmp/conflict.txt
+              git rebase --abort
+              exit 0
+            fi
+            echo "$CONFLICTS" | xargs git checkout --ours --
+            echo "$CONFLICTS" | xargs git add --
+            GIT_EDITOR=true git rebase --continue
+          done
+          git rebase --abort 2>/dev/null
+          echo "result=clean" >> "$GITHUB_OUTPUT"
+
+      - name: Open issue on rebase conflict
+        if: steps.rebase.outputs.result == 'conflict'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET: ${{ steps.rebase.outputs.target }}
+        run: |
+          # Ensure the label exists (idempotent).
+          gh label create rebase-conflict --color B60205 \
+            --description "Daily upstream rebase conflict" --force 2>/dev/null || true
+          # De-dupe: don't pile up a new issue while one is already open.
+          OPEN=$(gh issue list --label rebase-conflict --state open --json number --jq 'length')
+          if [ "${OPEN:-0}" != "0" ]; then
+            echo "An open rebase-conflict issue already exists; skipping."
+            exit 0
+          fi
+          # Build the body in a file, then create the issue via the REST API.
+          # `gh issue create --label` resolves labels over GraphQL and returns a
+          # misleading "label not found" under the Actions GITHUB_TOKEN even when the
+          # label exists; the REST issues endpoint takes the label inline reliably.
+          {
+            echo "Automated rebase of Locke onto upstream Keycloak \`${TARGET}\` hit a conflict."
+            echo ""
+            echo '```'
+            cat /tmp/conflict.txt
+            echo '```'
+            echo ""
+            echo "Resolve locally: \`git fetch upstream --tags && git rebase ${TARGET}\`."
+          } > /tmp/issue-body.md
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/issues" \
+            -f title="Rebase conflict onto Keycloak ${TARGET} ($(date -u +%Y-%m-%d))" \
+            -F body=@/tmp/issue-body.md \
+            -f 'labels[]=rebase-conflict' >/dev/null

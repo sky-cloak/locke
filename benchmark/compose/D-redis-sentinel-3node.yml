@@ -1,0 +1,70 @@
+name: bench-d-redis-sentinel
+# Redis HA via Sentinel: 1 master + 1 replica + 3 sentinels, plus Locke on redis-sentinel://.
+# Failover test: `docker kill bench-d-redis-sentinel-redis-master-1`; Sentinel promotes the
+# replica (down-after 5s) and Locke reconnects to the new master. down-after is set low for
+# fast tests; production failover speed is the operator's Sentinel config, not Locke.
+
+services:
+  redis-master:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis-replica:
+    image: redis:7-alpine
+    command: ["redis-server", "--replicaof", "redis-master", "6379", "--save", "", "--appendonly", "no"]
+    depends_on:
+      redis-master:
+        condition: service_healthy
+
+  sentinel: &sentinel
+    image: redis:7-alpine
+    # Sentinel rewrites its config, so generate it in a writable path at startup.
+    command:
+      - sh
+      - -c
+      - printf 'sentinel resolve-hostnames yes\nsentinel announce-hostnames yes\nsentinel monitor mymaster redis-master 6379 2\nsentinel down-after-milliseconds mymaster 5000\nsentinel failover-timeout mymaster 10000\nsentinel parallel-syncs mymaster 1\n' > /tmp/sentinel.conf && redis-sentinel /tmp/sentinel.conf
+    depends_on:
+      redis-master:
+        condition: service_healthy
+  sentinel-2:
+    <<: *sentinel
+  sentinel-3:
+    <<: *sentinel
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  keycloak:
+    image: localhost:5011/keycloak:999.0.0-redis   # locally-built dev image
+    command: ["start-dev", "--hostname-strict=false"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KC_CACHE: redis
+      KC_CACHE_REDIS_URL: "redis-sentinel://sentinel:26379,sentinel-2:26379,sentinel-3:26379?sentinelMasterId=mymaster"
+      KC_HTTP_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports:
+      - "18086:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      sentinel:
+        condition: service_started

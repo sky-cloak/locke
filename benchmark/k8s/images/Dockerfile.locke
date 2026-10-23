@@ -1,0 +1,6 @@
+FROM ghcr.io/sky-cloak/locke:26.6.1-1 AS build
+COPY dataset.jar /opt/keycloak/providers/keycloak-benchmark-dataset.jar
+RUN /opt/keycloak/bin/kc.sh build --db=postgres --cache=redis --health-enabled=true --metrics-enabled=true
+FROM ghcr.io/sky-cloak/locke:26.6.1-1
+COPY --from=build /opt/keycloak/ /opt/keycloak/
+ENTRYPOINT ["/opt/keycloak/bin/kc.sh","start","--optimized"]

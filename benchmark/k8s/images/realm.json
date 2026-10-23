@@ -1,0 +1,1534 @@
+{
+  "realm": "bench-kcb",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": false,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "clients": [
+    {
+      "clientId": "client-0",
+      "name": "client-0",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "client-0-secret",
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "*"
+      ],
+      "webOrigins": [
+        "*"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "user-0",
+      "enabled": true,
+      "email": "user-0@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "0",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-0-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-1",
+      "enabled": true,
+      "email": "user-1@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "1",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-1-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-2",
+      "enabled": true,
+      "email": "user-2@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "2",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-2-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-3",
+      "enabled": true,
+      "email": "user-3@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "3",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-3-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-4",
+      "enabled": true,
+      "email": "user-4@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "4",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-4-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-5",
+      "enabled": true,
+      "email": "user-5@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "5",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-5-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-6",
+      "enabled": true,
+      "email": "user-6@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "6",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-6-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-7",
+      "enabled": true,
+      "email": "user-7@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "7",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-7-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-8",
+      "enabled": true,
+      "email": "user-8@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "8",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-8-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-9",
+      "enabled": true,
+      "email": "user-9@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "9",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-9-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-10",
+      "enabled": true,
+      "email": "user-10@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "10",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-10-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-11",
+      "enabled": true,
+      "email": "user-11@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "11",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-11-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-12",
+      "enabled": true,
+      "email": "user-12@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "12",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-12-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-13",
+      "enabled": true,
+      "email": "user-13@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "13",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-13-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-14",
+      "enabled": true,
+      "email": "user-14@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "14",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-14-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-15",
+      "enabled": true,
+      "email": "user-15@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "15",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-15-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-16",
+      "enabled": true,
+      "email": "user-16@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "16",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-16-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-17",
+      "enabled": true,
+      "email": "user-17@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "17",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-17-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-18",
+      "enabled": true,
+      "email": "user-18@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "18",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-18-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-19",
+      "enabled": true,
+      "email": "user-19@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "19",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-19-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-20",
+      "enabled": true,
+      "email": "user-20@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "20",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-20-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-21",
+      "enabled": true,
+      "email": "user-21@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "21",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-21-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-22",
+      "enabled": true,
+      "email": "user-22@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "22",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-22-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-23",
+      "enabled": true,
+      "email": "user-23@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "23",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-23-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-24",
+      "enabled": true,
+      "email": "user-24@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "24",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-24-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-25",
+      "enabled": true,
+      "email": "user-25@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "25",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-25-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-26",
+      "enabled": true,
+      "email": "user-26@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "26",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-26-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-27",
+      "enabled": true,
+      "email": "user-27@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "27",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-27-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-28",
+      "enabled": true,
+      "email": "user-28@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "28",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-28-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-29",
+      "enabled": true,
+      "email": "user-29@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "29",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-29-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-30",
+      "enabled": true,
+      "email": "user-30@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "30",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-30-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-31",
+      "enabled": true,
+      "email": "user-31@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "31",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-31-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-32",
+      "enabled": true,
+      "email": "user-32@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "32",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-32-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-33",
+      "enabled": true,
+      "email": "user-33@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "33",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-33-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-34",
+      "enabled": true,
+      "email": "user-34@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "34",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-34-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-35",
+      "enabled": true,
+      "email": "user-35@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "35",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-35-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-36",
+      "enabled": true,
+      "email": "user-36@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "36",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-36-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-37",
+      "enabled": true,
+      "email": "user-37@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "37",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-37-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-38",
+      "enabled": true,
+      "email": "user-38@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "38",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-38-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-39",
+      "enabled": true,
+      "email": "user-39@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "39",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-39-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-40",
+      "enabled": true,
+      "email": "user-40@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "40",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-40-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-41",
+      "enabled": true,
+      "email": "user-41@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "41",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-41-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-42",
+      "enabled": true,
+      "email": "user-42@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "42",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-42-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-43",
+      "enabled": true,
+      "email": "user-43@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "43",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-43-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-44",
+      "enabled": true,
+      "email": "user-44@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "44",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-44-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-45",
+      "enabled": true,
+      "email": "user-45@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "45",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-45-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-46",
+      "enabled": true,
+      "email": "user-46@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "46",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-46-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-47",
+      "enabled": true,
+      "email": "user-47@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "47",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-47-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-48",
+      "enabled": true,
+      "email": "user-48@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "48",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-48-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-49",
+      "enabled": true,
+      "email": "user-49@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "49",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-49-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-50",
+      "enabled": true,
+      "email": "user-50@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "50",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-50-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-51",
+      "enabled": true,
+      "email": "user-51@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "51",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-51-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-52",
+      "enabled": true,
+      "email": "user-52@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "52",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-52-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-53",
+      "enabled": true,
+      "email": "user-53@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "53",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-53-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-54",
+      "enabled": true,
+      "email": "user-54@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "54",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-54-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-55",
+      "enabled": true,
+      "email": "user-55@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "55",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-55-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-56",
+      "enabled": true,
+      "email": "user-56@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "56",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-56-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-57",
+      "enabled": true,
+      "email": "user-57@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "57",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-57-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-58",
+      "enabled": true,
+      "email": "user-58@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "58",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-58-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-59",
+      "enabled": true,
+      "email": "user-59@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "59",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-59-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-60",
+      "enabled": true,
+      "email": "user-60@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "60",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-60-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-61",
+      "enabled": true,
+      "email": "user-61@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "61",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-61-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-62",
+      "enabled": true,
+      "email": "user-62@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "62",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-62-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-63",
+      "enabled": true,
+      "email": "user-63@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "63",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-63-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-64",
+      "enabled": true,
+      "email": "user-64@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "64",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-64-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-65",
+      "enabled": true,
+      "email": "user-65@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "65",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-65-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-66",
+      "enabled": true,
+      "email": "user-66@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "66",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-66-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-67",
+      "enabled": true,
+      "email": "user-67@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "67",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-67-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-68",
+      "enabled": true,
+      "email": "user-68@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "68",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-68-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-69",
+      "enabled": true,
+      "email": "user-69@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "69",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-69-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-70",
+      "enabled": true,
+      "email": "user-70@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "70",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-70-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-71",
+      "enabled": true,
+      "email": "user-71@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "71",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-71-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-72",
+      "enabled": true,
+      "email": "user-72@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "72",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-72-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-73",
+      "enabled": true,
+      "email": "user-73@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "73",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-73-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-74",
+      "enabled": true,
+      "email": "user-74@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "74",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-74-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-75",
+      "enabled": true,
+      "email": "user-75@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "75",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-75-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-76",
+      "enabled": true,
+      "email": "user-76@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "76",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-76-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-77",
+      "enabled": true,
+      "email": "user-77@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "77",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-77-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-78",
+      "enabled": true,
+      "email": "user-78@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "78",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-78-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-79",
+      "enabled": true,
+      "email": "user-79@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "79",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-79-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-80",
+      "enabled": true,
+      "email": "user-80@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "80",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-80-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-81",
+      "enabled": true,
+      "email": "user-81@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "81",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-81-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-82",
+      "enabled": true,
+      "email": "user-82@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "82",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-82-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-83",
+      "enabled": true,
+      "email": "user-83@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "83",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-83-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-84",
+      "enabled": true,
+      "email": "user-84@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "84",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-84-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-85",
+      "enabled": true,
+      "email": "user-85@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "85",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-85-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-86",
+      "enabled": true,
+      "email": "user-86@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "86",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-86-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-87",
+      "enabled": true,
+      "email": "user-87@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "87",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-87-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-88",
+      "enabled": true,
+      "email": "user-88@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "88",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-88-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-89",
+      "enabled": true,
+      "email": "user-89@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "89",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-89-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-90",
+      "enabled": true,
+      "email": "user-90@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "90",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-90-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-91",
+      "enabled": true,
+      "email": "user-91@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "91",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-91-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-92",
+      "enabled": true,
+      "email": "user-92@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "92",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-92-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-93",
+      "enabled": true,
+      "email": "user-93@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "93",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-93-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-94",
+      "enabled": true,
+      "email": "user-94@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "94",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-94-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-95",
+      "enabled": true,
+      "email": "user-95@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "95",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-95-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-96",
+      "enabled": true,
+      "email": "user-96@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "96",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-96-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-97",
+      "enabled": true,
+      "email": "user-97@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "97",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-97-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-98",
+      "enabled": true,
+      "email": "user-98@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "98",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-98-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "user-99",
+      "enabled": true,
+      "email": "user-99@bench.test",
+      "emailVerified": true,
+      "firstName": "U",
+      "lastName": "99",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user-99-password",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}

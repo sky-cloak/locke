@@ -25,6 +25,7 @@ import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.models.cache.authorization.CachedStoreFactoryProvider;
 import org.keycloak.models.cache.authorization.CachedStoreProviderFactory;
 import org.keycloak.models.cache.infinispan.entities.Revisioned;
+import org.keycloak.provider.EnvironmentDependentProviderFactory;
 
 import org.infinispan.Cache;
 import org.jboss.logging.Logger;
@@ -37,7 +38,7 @@ import static org.keycloak.models.cache.infinispan.InfinispanCacheRealmProviderF
  * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
  * @author <a href="mailto:sthorger@redhat.com">Stian Thorgersen</a>
  */
-public class InfinispanCacheStoreFactoryProviderFactory implements CachedStoreProviderFactory {
+public class InfinispanCacheStoreFactoryProviderFactory implements CachedStoreProviderFactory, EnvironmentDependentProviderFactory {
 
     private static final Logger log = Logger.getLogger(InfinispanCacheStoreFactoryProviderFactory.class);
     public static final String AUTHORIZATION_CLEAR_CACHE_EVENTS = "AUTHORIZATION_CLEAR_CACHE_EVENTS";
@@ -87,6 +88,11 @@ public class InfinispanCacheStoreFactoryProviderFactory implements CachedStorePr
     @Override
     public String getId() {
         return "default";
+    }
+
+    @Override
+    public boolean isSupported(Config.Scope config) {
+        return !"redis".equals(config.root().get("cache"));
     }
 
 }

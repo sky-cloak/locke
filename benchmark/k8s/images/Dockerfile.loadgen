@@ -1,0 +1,11 @@
+# Self-contained load generator for the OVH benchmark.
+# Bakes the keycloak-benchmark Gatling uber-jar + run-kcb.sh + the bench realm so the
+# loadgen pod can be recreated from scratch (survives node/pool teardown).
+FROM eclipse-temurin:21-jre
+RUN apt-get update && apt-get install -y --no-install-recommends jq curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY kcb.jar /kcb.jar
+COPY run-kcb.sh /run-kcb.sh
+COPY realm.json /realm.json
+RUN chmod +x /run-kcb.sh
+ENTRYPOINT ["sleep","infinity"]
