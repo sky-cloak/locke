@@ -8,6 +8,42 @@ the Percona Server / Amazon Corretto convention.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [26.8.1-1] - 2026-10-23
+
+### Changed
+- Built from Keycloak 26.8.1. See the upstream release notes.
+- Login failures follow upstream's new default, `login-failures:v2`: under `KC_CACHE=redis`
+  they are now stored in the database by upstream's JPA provider, as they are with
+  Infinispan. The Redis login-failure store is used only when `login-failures:v1` is
+  enabled, the same condition upstream now puts on its in-memory Infinispan store.
+- The Redis backend rebased onto 26.8.1 with two conflicts in patched upstream files (the
+  Infinispan proto-lock check and the Infinispan login-failure provider guard), an import
+  upstream dropped from the patched Quarkus build processor, and two new SPI methods to
+  implement (`CacheRealmProvider.clearManagedModels` and the user-scoped
+  `UserProvider.removeIssuedVerifiableCredential`).
+
+### Fixed
+- "Sign out from other devices" on a password, OTP, recovery-code or email update did not
+  end the user's other in-progress logins under `KC_CACHE=redis`. Keycloak 26.8 removes them
+  through a new authentication-session method whose default does nothing; the Redis
+  provider now implements it, finding the sessions through a per-user index instead of a
+  keyspace scan.
+- A "clear keys cache" or "clear CRL cache" issued on one node was only applied on nodes
+  that had served such a clear themselves, because the listener was registered by the
+  cache provider. It is now registered by the storage factory, as upstream 26.8 does for
+  Infinispan, so the clear reaches every node. Affects all earlier releases.
+- Ported upstream 26.8's cache-layer fixes to the Redis caches: objects already loaded in a
+  request are no longer returned for a lookup in another realm or resource server (users,
+  clients, roles, authorization scopes, resources, policies and permission tickets); the
+  user-managed-access flag read the realm's enabled flag after an update; a user-storage
+  sync's `lastSync` bookkeeping no longer evicts the realm's user cache; scope mappings to
+  a deleted role no longer yield null roles; user lookups by federated identity are
+  invalidated with their identity provider; and user updates without a username no longer
+  fail.
+- Paged read-only session listings applied the page before dropping expired sessions, so
+  pages came back short. Expired sessions are now dropped first, as upstream does.
+- The session expiration task no longer starts for one-time commands (export, import).
+
 ## [26.7.1-1] - 2026-08-18
 
 ### Changed
