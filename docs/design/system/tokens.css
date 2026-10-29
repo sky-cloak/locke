@@ -1,0 +1,50 @@
+/*
+ * Locke design tokens.
+ * Every custom property the sky-cloak/locke repo defines itself, with its
+ * value and name exactly as the repo has them. Sources:
+ *   docs/brand/palette.css
+ *   themes/src/main/resources/theme/keycloak.v2/login/resources/css/styles.css
+ *
+ * Everything else in the UI (PatternFly v5 spacers, font sizes, border and
+ * background colors, box shadows) is referenced by name as --pf-v5-global--*
+ * and resolved at runtime by PatternFly, which the repo pulls in as a
+ * dependency. Those names are listed in the foundations pages; their values
+ * are not defined in this repo and are therefore not declared here.
+ */
+:root {
+  /* Brand palette (docs/brand/palette.css) */
+  --locke-ink:   #252272; /* primary, deep indigo */
+  --locke-paper: #f5f1ea; /* canvas, warm cream */
+
+  /* Accents: use sparingly, never two at once. Reserved for premium / stamped surfaces. */
+  --locke-brass: #b88a3e; /* hardware nod */
+  --locke-coral: #c0563f; /* warm product accent */
+  --locke-sage:  #5d7a5a; /* organic, calm */
+
+  /* Dark-mode adjustments, kept under the names the repo gives them */
+  --locke-ink-dark:   #a5a3e8; /* light indigo on dark bg */
+  --locke-paper-dark: #0f0e2e; /* deep indigo bg */
+
+  /* Login theme (keycloak.v2/login/resources/css/styles.css) */
+  --keycloak-logo-url: url('../img/keycloak-logo-text.svg');
+  --keycloak-bg-logo-url: url("../img/keycloak-bg-darken.svg");
+  --keycloak-logo-height: 63px;
+  --keycloak-logo-width: 300px;
+  --keycloak-card-top-color: var(--pf-v5-global--palette--blue-400);
+}
+
+/* Dark scheme: the palette's dark values take over the two base roles.
+   The login theme toggles dark mode with the class pf-v5-theme-dark
+   (theme.properties: kcDarkModeClass) following prefers-color-scheme. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --locke-ink:   #a5a3e8;
+    --locke-paper: #0f0e2e;
+  }
+}
+
+.dark,
+.pf-v5-theme-dark {
+  --locke-ink:   #a5a3e8;
+  --locke-paper: #0f0e2e;
+}
