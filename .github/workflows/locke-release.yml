@@ -68,7 +68,30 @@ jobs:
             --provenance=false \
             --push
 
+      - name: Generate release notes
+        run: |
+          {
+            echo "## Locke ${GITHUB_REF_NAME}"
+            echo ""
+            echo "Keycloak base: \`${GITHUB_REF_NAME%-*}\` · Locke build: \`${GITHUB_REF_NAME##*-}\`"
+            echo ""
+            echo "Image: \`${IMAGE}:${GITHUB_REF_NAME}\`"
+            echo ""
+            echo "See [COMPATIBILITY.md](./COMPATIBILITY.md) and [benchmark/RESULTS.md](./benchmark/RESULTS.md)."
+          } > RELEASE_NOTES.md
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "Locke ${GITHUB_REF_NAME}" \
+            --notes-file RELEASE_NOTES.md \
+            build/keycloak-*.tar.gz
+
       - name: Mirror image to Quay and Docker Hub
+        # Runs after the GitHub release so a bad mirror token cannot block it;
+        # locke-registry-guard re-copies anything that did not land.
         # Each registry is independent and skipped when its credentials are absent.
         # Checks are on env vars (never secrets.* in a step-level if:) so the step always exists.
         env:
@@ -99,24 +122,3 @@ jobs:
           else
             echo "Docker Hub credentials not set; skipping Docker Hub."
           fi
-
-      - name: Generate release notes
-        run: |
-          {
-            echo "## Locke ${GITHUB_REF_NAME}"
-            echo ""
-            echo "Keycloak base: \`${GITHUB_REF_NAME%-*}\` · Locke build: \`${GITHUB_REF_NAME##*-}\`"
-            echo ""
-            echo "Image: \`${IMAGE}:${GITHUB_REF_NAME}\`"
-            echo ""
-            echo "See [COMPATIBILITY.md](./COMPATIBILITY.md) and [benchmark/RESULTS.md](./benchmark/RESULTS.md)."
-          } > RELEASE_NOTES.md
-
-      - name: Create GitHub release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create "${GITHUB_REF_NAME}" \
-            --title "Locke ${GITHUB_REF_NAME}" \
-            --notes-file RELEASE_NOTES.md \
-            build/keycloak-*.tar.gz
