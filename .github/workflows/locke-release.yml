@@ -84,10 +84,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" \
-            --title "Locke ${GITHUB_REF_NAME}" \
-            --notes-file RELEASE_NOTES.md \
-            build/keycloak-*.tar.gz
+          # Skip if it exists, so "re-run failed jobs" after a mirror failure gets past this step.
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            echo "Release ${GITHUB_REF_NAME} already exists; leaving it as is."
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              --title "Locke ${GITHUB_REF_NAME}" \
+              --notes-file RELEASE_NOTES.md \
+              build/keycloak-*.tar.gz
+          fi
 
       - name: Mirror image to Quay and Docker Hub
         # Runs after the GitHub release so a bad mirror token cannot block it;
@@ -108,7 +113,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y skopeo
           if [ -n "$QUAY_TOKEN" ]; then
             echo "Mirroring to $QUAY_IMAGE"
-            skopeo login quay.io -u "$QUAY_USER" --password "$QUAY_TOKEN"
+            printf '%s' "$QUAY_TOKEN" | skopeo login quay.io -u "$QUAY_USER" --password-stdin
             skopeo copy --all "docker://$IMAGE:$TAG"   "docker://$QUAY_IMAGE:$TAG"
             skopeo copy --all "docker://$IMAGE:latest" "docker://$QUAY_IMAGE:latest"
           else
@@ -116,7 +121,7 @@ jobs:
           fi
           if [ -n "$DOCKERHUB_TOKEN" ]; then
             echo "Mirroring to $DOCKERHUB_IMAGE"
-            skopeo login docker.io -u "$DOCKERHUB_USER" --password "$DOCKERHUB_TOKEN"
+            printf '%s' "$DOCKERHUB_TOKEN" | skopeo login docker.io -u "$DOCKERHUB_USER" --password-stdin
             skopeo copy --all "docker://$IMAGE:$TAG"   "docker://$DOCKERHUB_IMAGE:$TAG"
             skopeo copy --all "docker://$IMAGE:latest" "docker://$DOCKERHUB_IMAGE:latest"
           else

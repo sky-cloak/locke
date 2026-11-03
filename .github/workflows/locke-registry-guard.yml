@@ -56,7 +56,7 @@ jobs:
             --description "Locke image missing or stale on a mirror registry" --force >/dev/null
           echo "" >> /tmp/registry-report.md
           echo "Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >> /tmp/registry-report.md
-          OPEN=$(gh issue list --label registry-drift --state open --json number --jq '.[0].number // empty')
+          OPEN=$(gh issue list --label registry-drift --author app/github-actions --state open --json number --jq '.[0].number // empty')
           if [ -n "$OPEN" ]; then
             gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${OPEN}/comments" -F body=@/tmp/registry-report.md >/dev/null
           else
@@ -71,7 +71,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          for n in $(gh issue list --label registry-drift --state open --json number --jq '.[].number'); do
+          # Only bot-opened issues; a human-filed one with the label stays open.
+          for n in $(gh issue list --label registry-drift --author app/github-actions --state open --json number --jq '.[].number'); do
             gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${n}/comments" -F body=@/tmp/registry-report.md >/dev/null
             gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/${n}" -f state=closed -f state_reason=completed >/dev/null
           done
