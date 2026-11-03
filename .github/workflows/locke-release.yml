@@ -68,38 +68,6 @@ jobs:
             --provenance=false \
             --push
 
-      - name: Mirror image to Quay and Docker Hub
-        # Each registry is independent and skipped when its credentials are absent.
-        # Checks are on env vars (never secrets.* in a step-level if:) so the step always exists.
-        env:
-          QUAY_USER:       ${{ secrets.QUAY_USERNAME }}
-          QUAY_TOKEN:      ${{ secrets.QUAY_TOKEN }}
-          DOCKERHUB_USER:  ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-          QUAY_IMAGE:      quay.io/skycloak/locke
-          DOCKERHUB_IMAGE: docker.io/skycloak/locke
-        run: |
-          TAG="${GITHUB_REF_NAME}"
-          # skopeo copy --all preserves the full multi-arch manifest list, so the
-          # mirrors stay multi-arch too (docker tag/push would flatten to one arch).
-          sudo apt-get update && sudo apt-get install -y skopeo
-          if [ -n "$QUAY_TOKEN" ]; then
-            echo "Mirroring to $QUAY_IMAGE"
-            skopeo login quay.io -u "$QUAY_USER" --password "$QUAY_TOKEN"
-            skopeo copy --all "docker://$IMAGE:$TAG"   "docker://$QUAY_IMAGE:$TAG"
-            skopeo copy --all "docker://$IMAGE:latest" "docker://$QUAY_IMAGE:latest"
-          else
-            echo "Quay credentials not set; skipping Quay."
-          fi
-          if [ -n "$DOCKERHUB_TOKEN" ]; then
-            echo "Mirroring to $DOCKERHUB_IMAGE"
-            skopeo login docker.io -u "$DOCKERHUB_USER" --password "$DOCKERHUB_TOKEN"
-            skopeo copy --all "docker://$IMAGE:$TAG"   "docker://$DOCKERHUB_IMAGE:$TAG"
-            skopeo copy --all "docker://$IMAGE:latest" "docker://$DOCKERHUB_IMAGE:latest"
-          else
-            echo "Docker Hub credentials not set; skipping Docker Hub."
-          fi
-
       - name: Generate release notes
         run: |
           {
@@ -116,7 +84,46 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" \
-            --title "Locke ${GITHUB_REF_NAME}" \
-            --notes-file RELEASE_NOTES.md \
-            build/keycloak-*.tar.gz
+          # Skip if it exists, so "re-run failed jobs" after a mirror failure gets past this step.
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            echo "Release ${GITHUB_REF_NAME} already exists; leaving it as is."
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              --title "Locke ${GITHUB_REF_NAME}" \
+              --notes-file RELEASE_NOTES.md \
+              build/keycloak-*.tar.gz
+          fi
+
+      - name: Mirror image to Quay and Docker Hub
+        # Runs after the GitHub release so a bad mirror token cannot block it;
+        # locke-registry-guard re-copies anything that did not land.
+        # Each registry is independent and skipped when its credentials are absent.
+        # Checks are on env vars (never secrets.* in a step-level if:) so the step always exists.
+        env:
+          QUAY_USER:       ${{ secrets.QUAY_USERNAME }}
+          QUAY_TOKEN:      ${{ secrets.QUAY_TOKEN }}
+          DOCKERHUB_USER:  ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          QUAY_IMAGE:      quay.io/skycloak/locke
+          DOCKERHUB_IMAGE: docker.io/skycloak/locke
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          # skopeo copy --all preserves the full multi-arch manifest list, so the
+          # mirrors stay multi-arch too (docker tag/push would flatten to one arch).
+          sudo apt-get update && sudo apt-get install -y skopeo
+          if [ -n "$QUAY_TOKEN" ]; then
+            echo "Mirroring to $QUAY_IMAGE"
+            printf '%s' "$QUAY_TOKEN" | skopeo login quay.io -u "$QUAY_USER" --password-stdin
+            skopeo copy --all "docker://$IMAGE:$TAG"   "docker://$QUAY_IMAGE:$TAG"
+            skopeo copy --all "docker://$IMAGE:latest" "docker://$QUAY_IMAGE:latest"
+          else
+            echo "Quay credentials not set; skipping Quay."
+          fi
+          if [ -n "$DOCKERHUB_TOKEN" ]; then
+            echo "Mirroring to $DOCKERHUB_IMAGE"
+            printf '%s' "$DOCKERHUB_TOKEN" | skopeo login docker.io -u "$DOCKERHUB_USER" --password-stdin
+            skopeo copy --all "docker://$IMAGE:$TAG"   "docker://$DOCKERHUB_IMAGE:$TAG"
+            skopeo copy --all "docker://$IMAGE:latest" "docker://$DOCKERHUB_IMAGE:latest"
+          else
+            echo "Docker Hub credentials not set; skipping Docker Hub."
+          fi

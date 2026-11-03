@@ -1,0 +1,78 @@
+# Locke: daily check that every release tag, and `latest`, on Quay and Docker Hub
+# matches GHCR. Re-copies missing or stale tags, and keeps one `registry-drift`
+# issue open while anything is still wrong (e.g. an expired mirror token).
+name: locke-registry-guard
+
+on:
+  schedule:
+    - cron: '30 7 * * *'   # 07:30 UTC daily, after locke-rebase-test
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Report only, do not copy"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: locke-registry-guard
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    if: github.repository == 'sky-cloak/locke'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install skopeo
+        run: sudo apt-get update && sudo apt-get install -y skopeo
+
+      - name: Check and repair mirrors
+        id: guard
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          QUAY_USER: ${{ secrets.QUAY_USERNAME }}
+          QUAY_TOKEN: ${{ secrets.QUAY_TOKEN }}
+          DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+          REPORT: /tmp/registry-report.md
+        run: |
+          set +e
+          bash scripts/registry-guard.sh
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          cat /tmp/registry-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open or update the drift issue
+        if: steps.guard.outputs.code != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create registry-drift --color D93F0B \
+            --description "Locke image missing or stale on a mirror registry" --force >/dev/null
+          echo "" >> /tmp/registry-report.md
+          echo "Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >> /tmp/registry-report.md
+          OPEN=$(gh issue list --label registry-drift --author app/github-actions --state open --json number --jq '.[0].number // empty')
+          if [ -n "$OPEN" ]; then
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${OPEN}/comments" -F body=@/tmp/registry-report.md >/dev/null
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues" \
+              -f title="Locke image mirrors are out of sync with GHCR" \
+              -F body=@/tmp/registry-report.md -f "labels[]=registry-drift" >/dev/null
+          fi
+          exit 1
+
+      - name: Close the drift issue once clean
+        if: steps.guard.outputs.code == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Only bot-opened issues; a human-filed one with the label stays open.
+          for n in $(gh issue list --label registry-drift --author app/github-actions --state open --json number --jq '.[].number'); do
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${n}/comments" -F body=@/tmp/registry-report.md >/dev/null
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/${n}" -f state=closed -f state_reason=completed >/dev/null
+          done
